@@ -3,7 +3,7 @@ version: "3.8"
 services:
   cocktail-app:
     build:
-      context: https://github.com/Aephir/cocktail-recipes.git
+      context: .
       dockerfile: Dockerfile
     container_name: cocktail-app
     ports:
