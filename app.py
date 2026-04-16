@@ -417,10 +417,12 @@ with app.app_context():
     def _seed(username_env, password_env, default_u, default_p, role):
         uname = os.environ.get(username_env, default_u)
         passwd = os.environ.get(password_env, default_p)
-        if not User.query.filter_by(username=uname).first():
+        u = User.query.filter_by(username=uname).first()
+        if not u:
             u = User(username=uname, role=role)
-            u.set_password(passwd)
             db.session.add(u)
+        # Always sync password from environment variables
+        u.set_password(passwd)
 
     _seed('ADMIN_USERNAME', 'ADMIN_PASSWORD', 'admin', 'cocktails_admin', 'admin')
     _seed('USER_USERNAME', 'USER_PASSWORD', 'guest', 'cocktails_guest', 'user')
