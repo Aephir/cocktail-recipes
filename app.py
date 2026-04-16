@@ -5,8 +5,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
+import logging
 from datetime import datetime, timedelta
 from functools import wraps
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 # app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # Removed as app is accessed directly
@@ -177,11 +181,14 @@ def uploaded_file(filename):
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     data = request.get_json() or {}
-    user = User.query.filter_by(username=data.get('username', '')).first()
-    if user and user.check_password(data.get('password', '')):
+    username = data.get('username', '')
+    password = data.get('password', '')
+    user = User.query.filter_by(username=username).first()
+    if user and user.check_password(password):
         login_user(user, remember=True)
         return jsonify({'username': user.username, 'role': user.role})
-    return jsonify({'error': 'Invalid username or password'}), 401
+    logger.warning(f"Login failed for username: {username}")
+    return jsonify({'error': 'Invalid username or password', 'code': 'AUTH_FAILED'}), 401
 
 
 @app.route('/api/auth/logout', methods=['POST'])
@@ -417,16 +424,22 @@ with app.app_context():
     def _seed(username_env, password_env, default_u, default_p, role):
         uname = os.environ.get(username_env, default_u)
         passwd = os.environ.get(password_env, default_p)
+        logger.info(f"Syncing user '{uname}' with password from env var '{password_env}'")
         u = User.query.filter_by(username=uname).first()
         if not u:
+            logger.info(f"Creating new user '{uname}' with role '{role}'")
             u = User(username=uname, role=role)
             db.session.add(u)
+        else:
+            logger.info(f"User '{uname}' exists, updating password")
         # Always sync password from environment variables
         u.set_password(passwd)
+        db.session.add(u)  # Ensure user is tracked for updates
 
     _seed('ADMIN_USERNAME', 'ADMIN_PASSWORD', 'admin', 'cocktails_admin', 'admin')
     _seed('USER_USERNAME', 'USER_PASSWORD', 'guest', 'cocktails_guest', 'user')
     db.session.commit()
+    logger.info("User sync complete")
 
 
 if __name__ == '__main__':

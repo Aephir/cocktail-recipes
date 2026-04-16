@@ -30,7 +30,12 @@ async function api(method, path, body = null) {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   const data = await res.json();
-  if (res.status === 401) { showLogin(); throw new Error('Session expired'); }
+  if (res.status === 401) {
+    showLogin();
+    // Distinguish between login failure (AUTH_FAILED) and session expiry
+    const message = data.code === 'AUTH_FAILED' ? data.error : 'Session expired';
+    throw new Error(message);
+  }
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
