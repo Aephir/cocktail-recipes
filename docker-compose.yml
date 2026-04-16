@@ -9,7 +9,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - cocktail_data:/data
+      - /mnt/storage_1/docker/cocktail_recipes:/data
     environment:
       SECRET_KEY: "change-this-to-a-long-random-string-before-deploying"
       ADMIN_USERNAME: "admin"
