@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+# app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # Removed as app is accessed directly
 
 app.config.update(
     SECRET_KEY=os.environ.get('SECRET_KEY', 'dev-secret-CHANGE-THIS'),
@@ -18,9 +18,12 @@ app.config.update(
     MAX_CONTENT_LENGTH=32 * 1024 * 1024,
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SAMESITE=None,
+    SESSION_COOKIE_SECURE=False,
     REMEMBER_COOKIE_DURATION=timedelta(days=60),
     REMEMBER_COOKIE_HTTPONLY=True,
+    REMEMBER_COOKIE_SAMESITE=None,
+    REMEMBER_COOKIE_SECURE=False,
 )
 
 db = SQLAlchemy(app)
