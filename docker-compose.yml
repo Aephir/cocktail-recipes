@@ -11,11 +11,11 @@ services:
     volumes:
       - /mnt/storage_1/docker/cocktail_recipes:/data
     environment:
-      SECRET_KEY: "change-this-to-a-long-random-string-before-deploying"
-      ADMIN_USERNAME: "admin"
-      ADMIN_PASSWORD: "change-this-admin-password"
-      USER_USERNAME: "guest"
-      USER_PASSWORD: "change-this-user-password"
+      SECRET_KEY: ${SECRET_KEY}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      USER_USERNAME: ${USER_USERNAME:-guest}
+      USER_PASSWORD: ${USER_PASSWORD}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
