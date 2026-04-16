@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cocktail Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ░░ LOGIN ░░ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-mark">✦</div>
+    <h1 class="login-title">Cocktail Book</h1>
+    <p class="login-sub">Private collection</p>
+    <div id="login-error" class="alert-error hidden"></div>
+    <div class="field">
+      <input id="l-user" type="text" placeholder="Username" autocomplete="username" autofocus>
+    </div>
+    <div class="field">
+      <input id="l-pass" type="password" placeholder="Password" autocomplete="current-password">
+    </div>
+    <button id="l-submit" class="btn btn-primary w-full">Enter</button>
+  </div>
+</div>
+
+<!-- ░░ APP ░░ -->
+<div id="app" class="hidden">
+
+  <!-- Header -->
+  <header id="hdr">
+    <div class="hdr-start">
+      <button id="sidebar-toggle" class="icon-btn" title="Toggle filters" aria-label="Toggle filters">
+        <svg width="18" height="14" viewBox="0 0 18 14" fill="none"><rect width="18" height="2" rx="1" fill="currentColor"/><rect y="6" width="14" height="2" rx="1" fill="currentColor"/><rect y="12" width="10" height="2" rx="1" fill="currentColor"/></svg>
+      </button>
+      <span class="logo">✦ Cocktail Book</span>
+    </div>
+    <div class="hdr-center">
+      <label class="search-wrap">
+        <svg class="search-ico" width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/></svg>
+        <input id="search-input" type="text" placeholder="Search recipes…" autocomplete="off">
+      </label>
+    </div>
+    <div class="hdr-end">
+      <span id="user-pill"></span>
+      <button id="fields-btn" class="btn btn-ghost btn-sm admin-only hidden" title="Manage custom fields">⚙ Fields</button>
+      <button id="new-btn" class="btn btn-accent admin-only hidden">+ New Recipe</button>
+      <button id="logout-btn" class="btn btn-ghost">Sign out</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="sidebar-inner">
+        <section class="filter-group">
+          <h4 class="filter-label">Ingredients <span id="ing-total" class="filter-num"></span></h4>
+          <div id="ing-list" class="filter-list"></div>
+        </section>
+        <section class="filter-group">
+          <h4 class="filter-label">Tools <span id="tool-total" class="filter-num"></span></h4>
+          <div id="tool-list" class="filter-list"></div>
+        </section>
+        <button id="clear-btn" class="btn btn-ghost btn-sm">Clear all filters</button>
+      </div>
+    </aside>
+    <div id="sb-overlay" class="sb-overlay hidden"></div>
+
+    <!-- Main -->
+    <main id="main">
+      <div id="active-pills" class="active-pills"></div>
+      <div id="recipe-count" class="recipe-count"></div>
+      <div id="grid" class="grid"></div>
+      <div id="empty" class="empty hidden">
+        <span class="empty-glyph">⸙</span>
+        <p>No recipes match your filters.</p>
+        <button class="btn btn-ghost btn-sm" id="empty-clear">Clear filters</button>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ░░ DETAIL PANEL ░░ -->
+<div id="detail-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+  <div id="detail-panel" class="detail-panel">
+    <div class="panel-bar">
+      <button id="detail-close" class="icon-btn" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M1 1l16 16M17 1L1 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="panel-actions admin-only hidden">
+        <button id="edit-btn" class="btn btn-secondary btn-sm">Edit</button>
+        <button id="delete-btn" class="btn btn-danger btn-sm">Delete</button>
+      </div>
+    </div>
+    <div id="detail-body" class="detail-body"></div>
+  </div>
+</div>
+
+<!-- ░░ RECIPE FORM MODAL ░░ -->
+<div id="form-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+  <div id="form-modal" class="form-modal">
+    <div class="modal-hdr">
+      <h2 id="form-title" class="modal-title">New Recipe</h2>
+      <button id="form-close" class="icon-btn" aria-label="Close form">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M1 1l16 16M17 1L1 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Name <span class="req">*</span></label>
+        <input id="f-name" type="text" placeholder="Recipe name">
+      </div>
+
+      <div class="field">
+        <label>Image</label>
+        <div id="drop-area" class="drop-area">
+          <input id="f-image" type="file" accept="image/*" class="hidden">
+          <div id="drop-placeholder" class="drop-placeholder">
+            <span class="drop-icon">⊕</span>
+            <span>Click or drag an image here</span>
+          </div>
+          <img id="img-preview" class="img-preview hidden" alt="Preview">
+          <button id="remove-img" class="btn btn-ghost btn-sm hidden" type="button">Remove image</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Ingredients</label>
+        <div class="ing-header-row">
+          <span>Amount</span><span>Unit</span><span>Name</span><span></span>
+        </div>
+        <div id="f-ings" class="ings-list"></div>
+        <button id="add-ing" class="btn btn-ghost btn-sm" type="button">+ Add ingredient</button>
+      </div>
+
+      <div class="field">
+        <label>Tools</label>
+        <div id="f-tools" class="tools-list"></div>
+        <button id="add-tool" class="btn btn-ghost btn-sm" type="button">+ Add tool</button>
+      </div>
+
+      <div class="field">
+        <label>Procedure</label>
+        <textarea id="f-proc" rows="6" placeholder="Step-by-step instructions…"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="f-notes" rows="3" placeholder="Variations, tips, substitutions…"></textarea>
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <button id="form-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="form-save" class="btn btn-primary">Save Recipe</button>
+    </div>
+  </div>
+
+  <!-- Datalists -->
+  <datalist id="ing-opts"></datalist>
+  <datalist id="unit-opts">
+    <option value="ml">
+    <option value="cl">
+    <option value="dash">
+    <option value="drop">
+    <option value="barspoon">
+    <option value="pinch">
+    <option value="slice">
+    <option value="wedge">
+    <option value="sprig">
+    <option value="whole">
+    <option value="twist">
+    <option value="cube">
+  </datalist>
+  <datalist id="tool-opts"></datalist>
+</div>
+
+<!-- ░░ MANAGE FIELDS MODAL ░░ -->
+<div id="fields-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="form-modal" style="max-width:480px">
+    <div class="modal-hdr">
+      <h2 class="modal-title">Custom Fields</h2>
+      <button id="fields-close" class="icon-btn" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M1 1l16 16M17 1L1 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="fields-hint">These fields appear on every recipe. URL fields render as clickable links.</p>
+      <div id="fields-list" class="fields-def-list"></div>
+      <div class="fields-add-row">
+        <input id="new-field-name" type="text" placeholder="Field name (e.g. Source, Link)">
+        <select id="new-field-type">
+          <option value="text">Text</option>
+          <option value="url">URL</option>
+          <option value="textarea">Long text</option>
+        </select>
+        <button id="add-field-btn" class="btn btn-primary btn-sm">Add</button>
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <button id="fields-done" class="btn btn-primary">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ░░ CONFIRM ░░ -->
+<div id="confirm-overlay" class="overlay hidden">
+  <div class="confirm-box">
+    <p id="confirm-msg"></p>
+    <div class="confirm-row">
+      <button id="confirm-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="confirm-ok" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
