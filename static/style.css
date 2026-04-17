@@ -386,14 +386,15 @@ textarea { resize: vertical; min-height: 80px; }
   gap: 2px;
 }
 .mode-btn {
-  font-size: 9px;
-  padding: 2px 4px;
+  font-size: 10px;
+  padding: 4px 8px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-dim);
   border-radius: 3px;
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 32px;
 }
 .mode-btn.active {
   background: var(--accent);
@@ -1071,12 +1072,12 @@ textarea { resize: vertical; min-height: 80px; }
   #sidebar.mobile-open { transform: translateX(0); }
   #sidebar.collapsed { transform: translateX(-100%); }
 
-  #main { padding: 16px; }
+  #main { padding: 8px; }
 
-  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 
-  .card-thumb { height: 110px; }
-  .card-name { font-size: 17px; }
+  .card-thumb { height: 100px; }
+  .card-name { font-size: 15px; }
 
   .detail-panel { max-width: 100%; border-left: none; }
   .detail-inner { padding: 20px 16px 32px; }
@@ -1091,4 +1092,9 @@ textarea { resize: vertical; min-height: 80px; }
   .login-card { padding: 36px 24px 32px; margin: 16px; }
   .ing-header-row,
   .ing-row { grid-template-columns: 60px 54px 1fr 28px; gap: 5px; }
+
+  #main { padding: 4px; }
+  .grid { gap: 4px; }
+  .card-thumb { height: 90px; }
+  .card-name { font-size: 14px; }
 }

@@ -1199,6 +1199,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', e => {
     const btn = e.target.closest('.mode-btn');
     if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
       const toggle = btn.closest('.filter-mode-toggle');
       const group = toggle.dataset.group;
       const mode = btn.dataset.mode;
@@ -1210,6 +1212,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ─ Active pills removal ─ */
   document.getElementById('active-pills').addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
     const btn = e.target.closest('button[data-name]');
     if (!btn) return;
     if (btn.dataset.type === 'ing') toggleIng(btn.dataset.name);
