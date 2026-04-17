@@ -162,6 +162,11 @@ function setUser(user) {
   const isAdmin = user.role === 'admin';
   document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('hidden', !isAdmin));
   showApp();
+  // Reset viewport to allow normal scaling after login
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) {
+    viewport.setAttribute('content', 'width=device-width, initial-scale=1.0');
+  }
   loadData();
 }
 
@@ -1196,7 +1201,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('clear-btn').addEventListener('click', clearAllFilters);
 
   /* ─ Filter mode toggles ─ */
-  document.addEventListener('click', e => {
+  document.getElementById('sidebar').addEventListener('click', e => {
     const btn = e.target.closest('.mode-btn');
     if (btn) {
       e.preventDefault();
@@ -1212,15 +1217,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ─ Active pills removal ─ */
   document.getElementById('active-pills').addEventListener('click', e => {
-    e.preventDefault();
-    e.stopPropagation();
     const btn = e.target.closest('button[data-name]');
-    if (!btn) return;
-    if (btn.dataset.type === 'ing') toggleIng(btn.dataset.name);
-    else if (btn.dataset.type === 'tool') toggleTool(btn.dataset.name);
-    else if (btn.dataset.type === 'category') toggleCategory(btn.dataset.name);
-    else if (btn.dataset.type === 'subtype') toggleSubtype(btn.dataset.name);
-    else if (btn.dataset.type === 'tag') toggleTag(btn.dataset.name);
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.dataset.type === 'ing') toggleIng(btn.dataset.name);
+      else if (btn.dataset.type === 'tool') toggleTool(btn.dataset.name);
+      else if (btn.dataset.type === 'category') toggleCategory(btn.dataset.name);
+      else if (btn.dataset.type === 'subtype') toggleSubtype(btn.dataset.name);
+      else if (btn.dataset.type === 'tag') toggleTag(btn.dataset.name);
+    }
   });
 
   /* ─ Empty state clear ─ */

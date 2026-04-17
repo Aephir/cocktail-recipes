@@ -98,6 +98,9 @@ app.config.update(
     SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL', 'sqlite:////data/cocktails.db'),
     UPLOAD_FOLDER=os.environ.get('UPLOAD_FOLDER', '/data/uploads'),
     MAX_CONTENT_LENGTH=32 * 1024 * 1024,
+    SESSION_PERMANENT=True,
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+)
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE=None,
