@@ -1134,6 +1134,8 @@ document.addEventListener('DOMContentLoaded', () => {
         password: document.getElementById('l-pass').value,
       });
       setUser(user);
+      // Reset viewport to allow normal zooming after login
+      document.querySelector('meta[name="viewport"]').setAttribute('content', 'width=device-width, initial-scale=1.0');
     } catch (e) {
       loginErr.textContent = e.message;
       loginErr.classList.remove('hidden');
