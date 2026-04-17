@@ -20,8 +20,8 @@ GLASS_ICON_LOOKUP = [
     (['champagne saucer', 'champagne glass', 'saucer'], 'glass-champagne-saucer-size.svg'),
     (['collins'], 'glass-collins-size.svg'),
     (['highball'], 'glass-highball-size.svg'),
-    (['nick-and-nora', 'nick and nora'], 'glass-nick-and-nora-size.svg'),
-    (['old-fashioned', 'old fashioned', 'whisky tumbler', 'whiskey tumbler', 'tumbler'], 'glass-old-fashioned-size.svg'),
+    (['nick nora', 'nick and nora', 'nick & nora', 'nick nora glass'], 'glass-nick-and-nora-size.svg'),
+    (['old fashioned', 'old-fashioned', 'whisky tumbler', 'whiskey tumbler', 'tumbler'], 'glass-old-fashioned-size.svg'),
 ]
 
 LEGACY_CLASSIFICATION_MAP = {
@@ -49,12 +49,19 @@ def parse_tags(value):
     return []
 
 
+def normalize_tool_name(value):
+    text = str(value or '').lower()
+    text = re.sub(r'[^a-z0-9]+', ' ', text)
+    return text.strip()
+
+
 def choose_glass_icon(tools):
-    tool_names = [str(tool.tool.name or '').strip().lower() for tool in tools]
+    tool_names = [normalize_tool_name(tool.tool.name) for tool in tools]
     for aliases, filename in GLASS_ICON_LOOKUP:
         for alias in aliases:
+            normalized_alias = normalize_tool_name(alias)
             for tool_name in tool_names:
-                if re.search(rf'\b{re.escape(alias)}\b', tool_name):
+                if normalized_alias and normalized_alias in tool_name:
                     return filename
     return None
 
