@@ -93,6 +93,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 # app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # Removed as app is accessed directly
 
+cookie_secure = os.environ.get('COOKIE_SECURE', 'false').lower() == 'true'
+cookie_samesite = os.environ.get('COOKIE_SAMESITE', 'Lax')
+
 app.config.update(
     SECRET_KEY=os.environ.get('SECRET_KEY', 'dev-secret-CHANGE-THIS'),
     SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL', 'sqlite:////data/cocktails.db'),
@@ -102,12 +105,12 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(days=7),
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE=None,
-    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_SAMESITE=cookie_samesite,
+    SESSION_COOKIE_SECURE=cookie_secure,
     REMEMBER_COOKIE_DURATION=timedelta(days=60),
     REMEMBER_COOKIE_HTTPONLY=True,
-    REMEMBER_COOKIE_SAMESITE=None,
-    REMEMBER_COOKIE_SECURE=False,
+    REMEMBER_COOKIE_SAMESITE=cookie_samesite,
+    REMEMBER_COOKIE_SECURE=cookie_secure,
 )
 
 db = SQLAlchemy(app)

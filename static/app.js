@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   Cocktail Book — app.js
+   Walden's Cocktail Book — app.js
 ══════════════════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -150,7 +150,7 @@ function esc(s) {
 async function init() {
   try {
     const user = await api('GET', '/api/auth/me');
-    setUser(user);
+    await setUser(user);
   } catch {
     showLogin();
   }
@@ -176,7 +176,7 @@ function applyViewportForScreen(isLoginScreen) {
   }
 }
 
-function setUser(user) {
+async function setUser(user) {
   S.user = user;
   document.getElementById('user-pill').textContent = user.username;
   const isAdmin = user.role === 'admin';
@@ -185,7 +185,7 @@ function setUser(user) {
     document.activeElement.blur();
   }
   showApp();
-  loadData();
+  await loadData();
 }
 
 function showLogin() {
@@ -1175,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         username: document.getElementById('l-user').value,
         password: document.getElementById('l-pass').value,
       });
-      setUser(user);
+      await setUser(user);
     } catch (e) {
       loginErr.textContent = e.message;
       loginErr.classList.remove('hidden');

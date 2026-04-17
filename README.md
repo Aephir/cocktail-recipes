@@ -1,4 +1,4 @@
-# Cocktail Book
+# Walden's Cocktail Book
 
 A private, web-based cocktail recipe database. Manage your collection of cocktail recipes with ingredients, tools, procedures, ratings, and custom fields. Designed for personal use with admin-only editing.
 
