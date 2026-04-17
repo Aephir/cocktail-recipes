@@ -13,6 +13,9 @@ const S = {
   customFields: [],     // CustomFieldDef list
   activeIngs: new Set(),
   activeTools: new Set(),
+  activeCategories: new Set(),
+  activeSubtypes: new Set(),
+  activeTags: new Set(),
   search: '',
   currentId: null,
   editingId: null,
@@ -21,6 +24,56 @@ const S = {
   sidebarCollapsed: false,
   sidebarMobileOpen: false,
 };
+
+const CATEGORY_OPTIONS = [
+  'Cocktail', 'Highball', 'Collins', 'Fizz', 'Julep', 'Cobbler',
+  'Flip', 'Nog', 'Punch', 'Toddy', 'Buck', 'Rickey', 'Smash',
+  'Swizzle', 'Other'
+];
+const SUBTYPE_OPTIONS = ['Sour', 'Aromatic', 'Old-Fashioned', 'Improved', 'Daisy'];
+
+function normalizeTag(tag) {
+  return String(tag || '').trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function parseTags(value) {
+  if (Array.isArray(value)) {
+    return value.map(t => normalizeTag(t)).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map(t => normalizeTag(t)).filter(Boolean);
+  }
+  return [];
+}
+
+function formatTags(tags) {
+  return tags.map(normalizeTag).filter(Boolean);
+}
+
+function updateSubtypeState() {
+  const category = document.getElementById('f-category')?.value;
+  const subtype = document.getElementById('f-subtype');
+  if (!subtype) return;
+  if (category === 'Cocktail') {
+    subtype.disabled = false;
+  } else {
+    subtype.disabled = true;
+    subtype.value = '';
+  }
+}
+
+function populateClassificationSelectors() {
+  const categorySelect = document.getElementById('f-category');
+  const subtypeSelect = document.getElementById('f-subtype');
+  if (categorySelect) {
+    categorySelect.innerHTML = CATEGORY_OPTIONS.map(cat => `<option value="${esc(cat)}">${esc(cat)}</option>`).join('');
+  }
+  if (subtypeSelect) {
+    subtypeSelect.innerHTML = [''].concat(SUBTYPE_OPTIONS).map(sub => `<option value="${esc(sub)}">${esc(sub)}</option>`).join('');
+    subtypeSelect.disabled = true;
+  }
+  categorySelect?.addEventListener('change', updateSubtypeState);
+}
 
 /* ── API ────────────────────────────────────────────────────────────────── */
 async function api(method, path, body = null) {
@@ -135,7 +188,29 @@ function applyFilters() {
   const q = S.search.toLowerCase().trim();
   let list = S.recipes;
 
-  if (q) list = list.filter(r => r.name.toLowerCase().includes(q));
+  if (q) {
+    list = list.filter(r => {
+      const text = [
+        r.name,
+        r.category,
+        r.subtype,
+        ...(r.tags || []),
+      ].filter(Boolean).join(' ').toLowerCase();
+      return text.includes(q);
+    });
+  }
+
+  if (S.activeCategories.size) {
+    list = list.filter(r => S.activeCategories.has(r.category));
+  }
+
+  if (S.activeSubtypes.size) {
+    list = list.filter(r => r.subtype && S.activeSubtypes.has(r.subtype));
+  }
+
+  if (S.activeTags.size) {
+    list = list.filter(r => (r.tags || []).some(tag => S.activeTags.has(tag)));
+  }
 
   if (S.activeIngs.size) {
     list = list.filter(r => {
@@ -182,9 +257,30 @@ function toggleTool(name) {
   applyFilters();
 }
 
+function toggleCategory(name) {
+  S.activeCategories.has(name) ? S.activeCategories.delete(name) : S.activeCategories.add(name);
+  refreshChipStates();
+  applyFilters();
+}
+
+function toggleSubtype(name) {
+  S.activeSubtypes.has(name) ? S.activeSubtypes.delete(name) : S.activeSubtypes.add(name);
+  refreshChipStates();
+  applyFilters();
+}
+
+function toggleTag(name) {
+  S.activeTags.has(name) ? S.activeTags.delete(name) : S.activeTags.add(name);
+  refreshChipStates();
+  applyFilters();
+}
+
 function clearAllFilters() {
   S.activeIngs.clear();
   S.activeTools.clear();
+  S.activeCategories.clear();
+  S.activeSubtypes.clear();
+  S.activeTags.clear();
   S.search = '';
   document.getElementById('search-input').value = '';
   refreshChipStates();
@@ -195,17 +291,34 @@ function clearAllFilters() {
 function buildSidebar() {
   const ingCounts = new Map();
   const toolCounts = new Map();
+  const categoryCounts = new Map();
+  const subtypeCounts = new Map();
+  const tagCounts = new Map();
+
   for (const r of S.recipes) {
     r.ingredients.forEach(i => ingCounts.set(i.ingredient_name, (ingCounts.get(i.ingredient_name) || 0) + 1));
     r.tools.forEach(t => toolCounts.set(t.tool_name, (toolCounts.get(t.tool_name) || 0) + 1));
+    const category = r.category || 'Other';
+    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+    if (r.subtype) subtypeCounts.set(r.subtype, (subtypeCounts.get(r.subtype) || 0) + 1);
+    (r.tags || []).forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1));
   }
 
   const sortedIngs = [...ingCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const sortedTools = [...toolCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const sortedCategories = [...categoryCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const sortedSubtypes = [...subtypeCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const sortedTags = [...tagCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
   document.getElementById('ing-total').textContent = sortedIngs.length;
   document.getElementById('tool-total').textContent = sortedTools.length;
+  document.getElementById('cat-total').textContent = sortedCategories.length;
+  document.getElementById('subtype-total').textContent = sortedSubtypes.length;
+  document.getElementById('tag-total').textContent = sortedTags.length;
 
+  renderChips('cat-list', sortedCategories, S.activeCategories, 'category');
+  renderChips('subtype-list', sortedSubtypes, S.activeSubtypes, 'subtype');
+  renderChips('tag-list', sortedTags, S.activeTags, 'tag');
   renderChips('ing-list', sortedIngs, S.activeIngs, 'ing');
   renderChips('tool-list', sortedTools, S.activeTools, 'tool');
 }
@@ -230,14 +343,29 @@ function refreshChipStates() {
   document.querySelectorAll('#tool-list .fchip').forEach(btn => {
     btn.classList.toggle('active', S.activeTools.has(btn.dataset.name));
   });
+  document.querySelectorAll('#cat-list .fchip').forEach(btn => {
+    btn.classList.toggle('active', S.activeCategories.has(btn.dataset.name));
+  });
+  document.querySelectorAll('#subtype-list .fchip').forEach(btn => {
+    btn.classList.toggle('active', S.activeSubtypes.has(btn.dataset.name));
+  });
+  document.querySelectorAll('#tag-list .fchip').forEach(btn => {
+    btn.classList.toggle('active', S.activeTags.has(btn.dataset.name));
+  });
 }
 
 function updateSidebarCounts(filtered) {
   const ingCounts = new Map();
   const toolCounts = new Map();
+  const categoryCounts = new Map();
+  const subtypeCounts = new Map();
+  const tagCounts = new Map();
   for (const r of filtered) {
     r.ingredients.forEach(i => ingCounts.set(i.ingredient_name, (ingCounts.get(i.ingredient_name) || 0) + 1));
     r.tools.forEach(t => toolCounts.set(t.tool_name, (toolCounts.get(t.tool_name) || 0) + 1));
+    categoryCounts.set(r.category || 'Other', (categoryCounts.get(r.category || 'Other') || 0) + 1);
+    if (r.subtype) subtypeCounts.set(r.subtype, (subtypeCounts.get(r.subtype) || 0) + 1);
+    (r.tags || []).forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1));
   }
   document.querySelectorAll('#ing-list .fchip').forEach(btn => {
     btn.querySelector('.chip-ct').textContent = ingCounts.get(btn.dataset.name) || 0;
@@ -245,11 +373,38 @@ function updateSidebarCounts(filtered) {
   document.querySelectorAll('#tool-list .fchip').forEach(btn => {
     btn.querySelector('.chip-ct').textContent = toolCounts.get(btn.dataset.name) || 0;
   });
+  document.querySelectorAll('#cat-list .fchip').forEach(btn => {
+    btn.querySelector('.chip-ct').textContent = categoryCounts.get(btn.dataset.name) || 0;
+  });
+  document.querySelectorAll('#subtype-list .fchip').forEach(btn => {
+    btn.querySelector('.chip-ct').textContent = subtypeCounts.get(btn.dataset.name) || 0;
+  });
+  document.querySelectorAll('#tag-list .fchip').forEach(btn => {
+    btn.querySelector('.chip-ct').textContent = tagCounts.get(btn.dataset.name) || 0;
+  });
 }
 
 function renderActivePills() {
   const c = document.getElementById('active-pills');
   const pills = [];
+  for (const name of S.activeCategories) {
+    pills.push(`<span class="apill" data-type="category" data-name="${esc(name)}">
+      🧭 ${esc(name)}
+      <button data-type="category" data-name="${esc(name)}" title="Remove filter">×</button>
+    </span>`);
+  }
+  for (const name of S.activeSubtypes) {
+    pills.push(`<span class="apill" data-type="subtype" data-name="${esc(name)}">
+      ✦ ${esc(name)}
+      <button data-type="subtype" data-name="${esc(name)}" title="Remove filter">×</button>
+    </span>`);
+  }
+  for (const name of S.activeTags) {
+    pills.push(`<span class="apill" data-type="tag" data-name="${esc(name)}">
+      #${esc(name)}
+      <button data-type="tag" data-name="${esc(name)}" title="Remove filter">×</button>
+    </span>`);
+  }
   for (const name of S.activeIngs) {
     pills.push(`<span class="apill" data-type="ing" data-name="${esc(name)}">
       ${esc(name)}
@@ -292,6 +447,7 @@ function renderCards(list) {
       ? `<span class="ctag">+${r.ingredients.length - 3}</span>` : '';
 
     const scoreLabel = r.score != null ? `<div class="card-score">${esc(r.score)}/10</div>` : '';
+    const classification = r.category ? esc(r.category) + (r.subtype ? ` · ${esc(r.subtype)}` : '') : '';
 
     return `
       <div class="recipe-card" data-id="${r.id}">
@@ -302,7 +458,9 @@ function renderCards(list) {
             ${scoreLabel}
           </div>
           <div class="card-tags">${tags}${more}</div>
-          <div class="card-meta">${r.ingredients.length} ingredient${r.ingredients.length !== 1 ? 's' : ''}</div>
+          <div class="card-meta">
+            ${r.ingredients.length} ingredient${r.ingredients.length !== 1 ? 's' : ''}${classification ? ` · ${classification}` : ''}
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -489,6 +647,10 @@ async function openEditForm() {
   document.getElementById('f-name').value = recipe.name;
   document.getElementById('f-proc').value = recipe.procedure || '';
   document.getElementById('f-notes').value = recipe.notes || '';
+  document.getElementById('f-category').value = recipe.category || 'Other';
+  document.getElementById('f-subtype').value = recipe.subtype || '';
+  document.getElementById('f-tags').value = (recipe.tags || []).join(', ');
+  updateSubtypeState();
 
   if (recipe.image_url) {
     document.getElementById('img-preview').src = recipe.image_url;
@@ -542,6 +704,10 @@ function renderFormCustomFields(recipe) {
 function resetForm() {
   document.getElementById('f-name').value = '';
   document.getElementById('f-score').value = '5';
+  document.getElementById('f-category').value = 'Other';
+  document.getElementById('f-subtype').value = '';
+  document.getElementById('f-tags').value = '';
+  updateSubtypeState();
   document.getElementById('f-proc').value = '';
   document.getElementById('f-notes').value = '';
   document.getElementById('f-ings').innerHTML = '';
@@ -685,9 +851,15 @@ async function saveRecipe() {
     if (el) custom_fields[String(f.id)] = el.value.trim();
   });
 
+  const category = document.getElementById('f-category').value;
+  let subtype = document.getElementById('f-subtype').value.trim() || null;
+  if (category !== 'Cocktail') subtype = null;
   const payload = {
     name,
     score: parseInt(document.getElementById('f-score').value, 10) || null,
+    category,
+    subtype,
+    tags: parseTags(document.getElementById('f-tags').value),
     procedure: document.getElementById('f-proc').value.trim(),
     notes: document.getElementById('f-notes').value.trim(),
     ingredients,
@@ -983,6 +1155,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const chip = e.target.closest('.fchip');
     if (chip) toggleTool(chip.dataset.name);
   });
+  document.getElementById('cat-list').addEventListener('click', e => {
+    const chip = e.target.closest('.fchip');
+    if (chip) toggleCategory(chip.dataset.name);
+  });
+  document.getElementById('subtype-list').addEventListener('click', e => {
+    const chip = e.target.closest('.fchip');
+    if (chip) toggleSubtype(chip.dataset.name);
+  });
+  document.getElementById('tag-list').addEventListener('click', e => {
+    const chip = e.target.closest('.fchip');
+    if (chip) toggleTag(chip.dataset.name);
+  });
   document.getElementById('clear-btn').addEventListener('click', clearAllFilters);
 
   /* ─ Active pills removal ─ */
@@ -990,7 +1174,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = e.target.closest('button[data-name]');
     if (!btn) return;
     if (btn.dataset.type === 'ing') toggleIng(btn.dataset.name);
-    else toggleTool(btn.dataset.name);
+    else if (btn.dataset.type === 'tool') toggleTool(btn.dataset.name);
+    else if (btn.dataset.type === 'category') toggleCategory(btn.dataset.name);
+    else if (btn.dataset.type === 'subtype') toggleSubtype(btn.dataset.name);
+    else if (btn.dataset.type === 'tag') toggleTag(btn.dataset.name);
   });
 
   /* ─ Empty state clear ─ */
@@ -1121,6 +1308,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === document.getElementById('bulk-import-overlay')) closeBulkImportModal();
   });
   document.getElementById('bulk-import-submit').addEventListener('click', submitBulkImport);
+  populateClassificationSelectors();
 
   /* ─ Boot ─ */
   init();

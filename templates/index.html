@@ -76,6 +76,18 @@
           <h4 class="filter-label">Tools <span id="tool-total" class="filter-num"></span></h4>
           <div id="tool-list" class="filter-list"></div>
         </section>
+        <section class="filter-group">
+          <h4 class="filter-label">Category <span id="cat-total" class="filter-num"></span></h4>
+          <div id="cat-list" class="filter-list"></div>
+        </section>
+        <section class="filter-group">
+          <h4 class="filter-label">Subtype <span id="subtype-total" class="filter-num"></span></h4>
+          <div id="subtype-list" class="filter-list"></div>
+        </section>
+        <section class="filter-group">
+          <h4 class="filter-label">Tags <span id="tag-total" class="filter-num"></span></h4>
+          <div id="tag-list" class="filter-list"></div>
+        </section>
         <button id="clear-btn" class="btn btn-ghost btn-sm">Clear all filters</button>
       </div>
     </aside>
@@ -140,6 +152,19 @@
           <option value="9">9</option>
           <option value="10">10</option>
         </select>
+      </div>
+
+      <div class="field">
+        <label>Category</label>
+        <select id="f-category"></select>
+      </div>
+      <div class="field">
+        <label>Subtype</label>
+        <select id="f-subtype"></select>
+      </div>
+      <div class="field">
+        <label>Tags</label>
+        <input id="f-tags" type="text" placeholder="Comma-separated tags">
       </div>
 
       <div class="field">

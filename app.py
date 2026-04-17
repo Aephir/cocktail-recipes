@@ -9,6 +9,55 @@ import re
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
+
+CLASSIFICATION_CATEGORIES = [
+    'Cocktail', 'Highball', 'Collins', 'Fizz', 'Julep', 'Cobbler', 'Flip',
+    'Nog', 'Punch', 'Toddy', 'Buck', 'Rickey', 'Smash', 'Swizzle', 'Other'
+]
+COCKTAIL_SUBTYPES = ['Sour', 'Aromatic', 'Old-Fashioned', 'Improved', 'Daisy']
+
+LEGACY_CLASSIFICATION_MAP = {
+    'sour': ('Cocktail', 'Sour'),
+    'aromatic': ('Cocktail', 'Aromatic'),
+    'old-fashioned': ('Cocktail', 'Old-Fashioned'),
+    'old fashioned': ('Cocktail', 'Old-Fashioned'),
+    'improved': ('Cocktail', 'Improved'),
+    'daisy': ('Cocktail', 'Daisy'),
+}
+
+
+def parse_tags(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(t).strip() for t in value if str(t).strip()]
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(t).strip() for t in parsed if str(t).strip()]
+        except Exception:
+            return [part.strip() for part in value.split(',') if part.strip()]
+    return []
+
+
+def format_tags(tags):
+    return json.dumps([str(t).strip() for t in (tags or []) if str(t).strip()])
+
+
+def map_legacy_classification(value):
+    if not value:
+        return None, None
+    raw = str(value).strip()
+    key = raw.lower()
+    if key in LEGACY_CLASSIFICATION_MAP:
+        return LEGACY_CLASSIFICATION_MAP[key]
+    if key == 'cocktail':
+        return 'Cocktail', None
+    for category in CLASSIFICATION_CATEGORIES:
+        if category.lower() == key:
+            return category, None
+    return raw, None
 import logging
 from datetime import datetime, timedelta
 from functools import wraps
@@ -128,6 +177,9 @@ class Recipe(db.Model):
     __tablename__ = 'recipes'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(100), nullable=False, default='Other')
+    subtype = db.Column(db.String(100), nullable=True)
+    tags = db.Column(db.Text, default='[]')
     score = db.Column(db.Integer, default=5, nullable=False)
     procedure = db.Column(db.Text, default='')
     notes = db.Column(db.Text, default='')
@@ -166,6 +218,9 @@ class Recipe(db.Model):
                 }
                 for ri in self.recipe_ingredients
             ],
+            'category': self.category or 'Other',
+            'subtype': self.subtype,
+            'tags': parse_tags(self.tags),
             'tools': [
                 {
                     'tool_id': rt.tool_id,
@@ -274,8 +329,22 @@ def api_create_recipe():
     if not data.get('name', '').strip():
         return jsonify({'error': 'Name is required'}), 400
 
+    category = (data.get('category') or '').strip() or 'Other'
+    subtype = (data.get('subtype') or '').strip() or None
+    if not category:
+        return jsonify({'error': 'Category is required'}), 400
+    if subtype and category != 'Cocktail':
+        return jsonify({'error': 'Subtype is only allowed for Cocktail category'}), 400
+    if subtype and subtype not in COCKTAIL_SUBTYPES:
+        return jsonify({'error': 'Invalid subtype for Cocktail'}), 400
+
+    tags = parse_tags(data.get('tags', []))
+
     recipe = Recipe(
         name=data['name'].strip(),
+        category=category,
+        subtype=subtype,
+        tags=format_tags(tags),
         score=int(data.get('score', 5)) if str(data.get('score', '')).strip() != '' else 5,
         procedure=data.get('procedure', '').strip(),
         notes=data.get('notes', '').strip(),
@@ -306,6 +375,20 @@ def api_update_recipe(rid):
         return jsonify({'error': 'Invalid JSON object'}), 400
 
     recipe.name = data.get('name', recipe.name).strip()
+    if 'category' in data:
+        category = (data.get('category') or '').strip()
+        if not category:
+            return jsonify({'error': 'Category is required'}), 400
+        recipe.category = category
+    if 'subtype' in data:
+        subtype = (data.get('subtype') or '').strip() or None
+        if subtype and recipe.category != 'Cocktail':
+            return jsonify({'error': 'Subtype is only allowed for Cocktail category'}), 400
+        if subtype and subtype not in COCKTAIL_SUBTYPES:
+            return jsonify({'error': 'Invalid subtype for Cocktail'}), 400
+        recipe.subtype = subtype
+    if 'tags' in data:
+        recipe.tags = format_tags(parse_tags(data.get('tags', [])))
     if 'score' in data:
         try:
             recipe.score = int(data['score'])
@@ -377,8 +460,16 @@ def api_bulk_import():
                 errors.append(f'Recipe {i+1}: Name is required')
                 continue
 
+            category = (recipe_data.get('category') or 'Other').strip() or 'Other'
+            subtype = (recipe_data.get('subtype') or '').strip() or None
+            tags = parse_tags(recipe_data.get('tags', []))
+            if subtype and category != 'Cocktail':
+                subtype = None
             recipe = Recipe(
                 name=recipe_data['name'].strip(),
+                category=category,
+                subtype=subtype,
+                tags=format_tags(tags),
                 score=int(recipe_data.get('score', 5)) if isinstance(recipe_data.get('score'), (int, float)) and 1 <= recipe_data.get('score', 5) <= 10 else 5,
                 procedure=recipe_data.get('procedure', '').strip(),
                 notes=recipe_data.get('notes', '').strip() if recipe_data.get('notes') else '',
@@ -640,18 +731,6 @@ def api_upload():
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 
-with app.app_context():
-    db.create_all()
-    recipe_columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipes')]
-    if 'score' not in recipe_columns:
-        db.session.execute(text('ALTER TABLE recipes ADD COLUMN score INTEGER DEFAULT 5'))
-        db.session.execute(text('UPDATE recipes SET score=5 WHERE score IS NULL'))
-        db.session.commit()
-    columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipe_ingredients')]
-    if 'subrecipe_id' not in columns:
-        db.session.execute(text('ALTER TABLE recipe_ingredients ADD COLUMN subrecipe_id INTEGER'))
-        db.session.commit()
-
 @app.errorhandler(Exception)
 def handle_api_exceptions(error):
     if request.path.startswith('/api/'):
@@ -667,9 +746,30 @@ with app.app_context():
         db.session.execute(text('ALTER TABLE recipes ADD COLUMN score INTEGER DEFAULT 5'))
         db.session.execute(text('UPDATE recipes SET score=5 WHERE score IS NULL'))
         db.session.commit()
+    if 'category' not in recipe_columns:
+        db.session.execute(text("ALTER TABLE recipes ADD COLUMN category VARCHAR(100) DEFAULT 'Other'"))
+        db.session.commit()
+    if 'subtype' not in recipe_columns:
+        db.session.execute(text('ALTER TABLE recipes ADD COLUMN subtype VARCHAR(100)'))
+        db.session.commit()
+    if 'tags' not in recipe_columns:
+        db.session.execute(text("ALTER TABLE recipes ADD COLUMN tags TEXT DEFAULT '[]'"))
+        db.session.commit()
     columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipe_ingredients')]
     if 'subrecipe_id' not in columns:
         db.session.execute(text('ALTER TABLE recipe_ingredients ADD COLUMN subrecipe_id INTEGER'))
+        db.session.commit()
+
+    if 'classification' in recipe_columns:
+        rows = db.session.execute(text('SELECT id, classification FROM recipes')).fetchall()
+        for rid, classification in rows:
+            if not classification:
+                continue
+            category, subtype = map_legacy_classification(classification)
+            db.session.execute(
+                text('UPDATE recipes SET category = :category, subtype = :subtype WHERE id = :id'),
+                {'category': category or 'Other', 'subtype': subtype, 'id': rid}
+            )
         db.session.commit()
 
     def _seed(username_env, password_env, default_u, default_p, role):
