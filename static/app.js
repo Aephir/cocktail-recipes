@@ -146,6 +146,12 @@ function esc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function displayLabel(value) {
+  const s = String(value || '').trim();
+  if (!s) return '';
+  return s.replace(/^([a-z])/, (_, c) => c.toUpperCase());
+}
+
 /* ── Auth ───────────────────────────────────────────────────────────────── */
 async function init() {
   try {
@@ -403,7 +409,7 @@ function renderChips(containerId, entries, activeSet, type) {
     btn.className = `fchip${activeSet.has(name) ? ' active' : ''}`;
     btn.dataset.name = name;
     btn.dataset.type = type;
-    btn.innerHTML = `<span>${esc(name)}</span><span class="chip-ct">${count}</span>`;
+    btn.innerHTML = `<span>${esc(displayLabel(name))}</span><span class="chip-ct">${count}</span>`;
     el.appendChild(btn);
   }
 }
@@ -461,31 +467,31 @@ function renderActivePills() {
   const pills = [];
   for (const name of S.activeCategories) {
     pills.push(`<span class="apill" data-type="category" data-name="${name}">
-      🧭 ${esc(name)}
+      🧭 ${esc(displayLabel(name))}
       <button data-type="category" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   for (const name of S.activeSubtypes) {
     pills.push(`<span class="apill" data-type="subtype" data-name="${name}">
-      ✦ ${esc(name)}
+      ✦ ${esc(displayLabel(name))}
       <button data-type="subtype" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   for (const name of S.activeTags) {
     pills.push(`<span class="apill" data-type="tag" data-name="${name}">
-      #${esc(name)}
+      #${esc(displayLabel(name))}
       <button data-type="tag" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   for (const name of S.activeIngs) {
     pills.push(`<span class="apill" data-type="ing" data-name="${name}">
-      ${esc(name)}
+      ${esc(displayLabel(name))}
       <button data-type="ing" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   for (const name of S.activeTools) {
     pills.push(`<span class="apill" data-type="tool" data-name="${name}">
-      ⚙ ${esc(name)}
+      ⚙ ${esc(displayLabel(name))}
       <button data-type="tool" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
@@ -509,24 +515,24 @@ function renderCards(list) {
 
   grid.innerHTML = list.map(r => {
     const thumbHtml = r.image_url
-      ? `<img src="${esc(r.image_url)}" alt="${esc(r.name)}" loading="lazy">`
+      ? `<img src="${esc(r.image_url)}" alt="${esc(displayLabel(r.name))}" loading="lazy">`
       : `<div class="card-thumb-placeholder">◈</div>`;
 
     const tags = r.ingredients.slice(0, 3)
-      .map(i => `<span class="ctag${S.activeIngs.has(i.ingredient_name) ? ' active' : ''}">${esc(i.ingredient_name)}</span>`)
+      .map(i => `<span class="ctag${S.activeIngs.has(i.ingredient_name) ? ' active' : ''}">${esc(displayLabel(i.ingredient_name))}</span>`)
       .join('');
     const more = r.ingredients.length > 3
       ? `<span class="ctag">+${r.ingredients.length - 3}</span>` : '';
 
     const scoreLabel = r.score != null ? `<div class="card-score">${esc(r.score)}/10</div>` : '';
-    const classification = r.category ? esc(r.category) + (r.subtype ? ` · ${esc(r.subtype)}` : '') : '';
+    const classification = r.category ? esc(displayLabel(r.category)) + (r.subtype ? ` · ${esc(displayLabel(r.subtype))}` : '') : '';
 
     return `
       <div class="recipe-card" data-id="${r.id}">
         <div class="card-thumb">${thumbHtml}</div>
         <div class="card-body">
           <div class="card-head">
-            <div class="card-name">${esc(r.name)}</div>
+            <div class="card-name">${esc(displayLabel(r.name))}</div>
             ${scoreLabel}
           </div>
           <div class="card-tags">${tags}${more}</div>
@@ -556,14 +562,14 @@ function closeDetail() {
 
 function renderDetail(recipe) {
   const imgHtml = recipe.image_url
-    ? `<img class="detail-image" src="${esc(recipe.image_url)}" alt="${esc(recipe.name)}">`
+    ? `<img class="detail-image" src="${esc(recipe.image_url)}" alt="${esc(displayLabel(recipe.name))}">`
     : '';
 
   const ingRows = recipe.ingredients.map((i, idx) => {
     const dispName = i.subrecipe_name || i.ingredient_name;
     const nameHtml = i.subrecipe_id
-      ? `<a href="#" class="recipe-link" data-rid="${i.subrecipe_id}">${esc(dispName)}</a>`
-      : esc(dispName);
+      ? `<a href="#" class="recipe-link" data-rid="${i.subrecipe_id}">${esc(displayLabel(dispName))}</a>`
+      : esc(displayLabel(dispName));
     return `
     <tr>
       <td class="itd-amt" data-ing-idx="${idx}" data-unit="${esc(i.unit)}" data-base="${i.amount ?? ''}">${
@@ -575,13 +581,13 @@ function renderDetail(recipe) {
   }).join('');
 
   const toolsHtml = recipe.tools.length
-    ? recipe.tools.map(t => `<span class="tool-chip">${esc(t.tool_name)}</span>`).join('')
+    ? recipe.tools.map(t => `<span class="tool-chip">${esc(displayLabel(t.tool_name))}</span>`).join('')
     : '<span style="color:var(--text-muted)">—</span>';
 
   const garnishHtml = recipe.garnishes?.length
     ? `<div class="dsec">
         <div class="dsec-title">Garnish</div>
-        <ul class="garnish-list">${recipe.garnishes.map(g => `<li>${esc(g.garnish_text || g.ingredient_name || '')}</li>`).join('')}</ul>
+        <ul class="garnish-list">${recipe.garnishes.map(g => `<li>${esc(displayLabel(g.garnish_text || g.ingredient_name || ''))}</li>`).join('')}</ul>
       </div>`
     : '';
 
@@ -590,7 +596,7 @@ function renderDetail(recipe) {
   document.getElementById('detail-body').innerHTML = `
     ${imgHtml}
     <div class="detail-inner">
-      <h1 class="detail-name">${esc(recipe.name)}</h1>
+      <h1 class="detail-name">${esc(displayLabel(recipe.name))}</h1>
       ${recipe.score != null ? `<div class="detail-score">Rating ${esc(recipe.score)}/10</div>` : ''}
 
       <div class="servings-row">
@@ -1054,6 +1060,118 @@ function renderFieldsList() {
     </div>`).join('');
 }
 
+/* ── Data Editor Modal ─────────────────────────────────────────────────── */
+async function openDataEditorModal() {
+  const overlay = document.getElementById('data-editor-overlay');
+  const tableSelect = document.getElementById('de-table');
+  const rowSelect = document.getElementById('de-row');
+  const jsonArea = document.getElementById('de-json');
+  const status = document.getElementById('de-status');
+
+  overlay.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  status.classList.add('hidden');
+  jsonArea.value = '';
+  tableSelect.innerHTML = '<option value="">Loading tables…</option>';
+  rowSelect.innerHTML = '<option value="">Select row</option>';
+
+  try {
+    const tables = await api('GET', '/api/admin/data/tables');
+    tableSelect.innerHTML = tables
+      .map(t => `<option value="${esc(t.key)}">${esc(t.label)} (${t.count})</option>`)
+      .join('');
+    if (tables.length) {
+      tableSelect.value = tables[0].key;
+      await loadDataEditorRows();
+    }
+  } catch (e) {
+    showDataEditorStatus(e.message, true);
+  }
+}
+
+function closeDataEditorModal() {
+  document.getElementById('data-editor-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function showDataEditorStatus(message, isError = false) {
+  const status = document.getElementById('de-status');
+  status.classList.remove('hidden');
+  status.className = isError ? 'alert-error' : 'alert-success';
+  status.textContent = message;
+}
+
+async function loadDataEditorRows() {
+  const table = document.getElementById('de-table').value;
+  const rowSelect = document.getElementById('de-row');
+  const jsonArea = document.getElementById('de-json');
+  if (!table) {
+    rowSelect.innerHTML = '<option value="">Select row</option>';
+    jsonArea.value = '';
+    return;
+  }
+
+  rowSelect.innerHTML = '<option value="">Loading rows…</option>';
+  jsonArea.value = '';
+  const rows = await api('GET', `/api/admin/data/${encodeURIComponent(table)}/rows?limit=500`);
+  rowSelect.innerHTML = '<option value="">Select row</option>' + rows
+    .map(r => `<option value="${r.id}">#${r.id} · ${esc(r.label)}</option>`)
+    .join('');
+}
+
+async function loadDataEditorRecord() {
+  const table = document.getElementById('de-table').value;
+  const rowId = document.getElementById('de-row').value;
+  const jsonArea = document.getElementById('de-json');
+  if (!table || !rowId) {
+    jsonArea.value = '';
+    return;
+  }
+
+  const data = await api('GET', `/api/admin/data/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`);
+  const editable = {};
+  data.editable_fields.forEach(key => {
+    editable[key] = data.record[key];
+  });
+  jsonArea.value = JSON.stringify(editable, null, 2);
+}
+
+async function saveDataEditorRecord() {
+  const table = document.getElementById('de-table').value;
+  const rowId = document.getElementById('de-row').value;
+  const jsonArea = document.getElementById('de-json');
+  const saveBtn = document.getElementById('de-save');
+  if (!table || !rowId) {
+    showDataEditorStatus('Choose a table and row first.', true);
+    return;
+  }
+
+  let fields;
+  try {
+    fields = JSON.parse(jsonArea.value || '{}');
+  } catch (e) {
+    showDataEditorStatus(`Invalid JSON: ${e.message}`, true);
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  try {
+    const result = await api('PUT', `/api/admin/data/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`, { fields });
+    const editable = { ...result.record };
+    delete editable.id;
+    jsonArea.value = JSON.stringify(editable, null, 2);
+    showDataEditorStatus('Saved successfully.');
+    await loadDataEditorRows();
+    document.getElementById('de-row').value = String(rowId);
+  } catch (e) {
+    showDataEditorStatus(e.message, true);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Changes';
+  }
+}
+
 /* ── Bulk Import Modal ─────────────────────────────────────────────────── */
 function openBulkImportModal() {
   document.getElementById('bulk-import-json').value = '';
@@ -1321,6 +1439,10 @@ document.addEventListener('DOMContentLoaded', () => {
     closeMobileMenu();
     openFieldsModal();
   });
+  document.getElementById('data-editor-btn-mobile').addEventListener('click', () => {
+    closeMobileMenu();
+    openDataEditorModal();
+  });
   document.getElementById('bulk-import-btn-mobile').addEventListener('click', () => {
     closeMobileMenu();
     openBulkImportModal();
@@ -1388,6 +1510,8 @@ document.addEventListener('DOMContentLoaded', () => {
       closeForm();
     } else if (!document.getElementById('detail-overlay').classList.contains('hidden')) {
       closeDetail();
+    } else if (!document.getElementById('data-editor-overlay').classList.contains('hidden')) {
+      closeDataEditorModal();
     }
   });
 
@@ -1400,6 +1524,30 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('add-field-btn').addEventListener('click', async () => {
+
+  /* ─ Data Editor modal ─ */
+  document.getElementById('data-editor-btn').addEventListener('click', openDataEditorModal);
+  document.getElementById('data-editor-close').addEventListener('click', closeDataEditorModal);
+  document.getElementById('de-cancel').addEventListener('click', closeDataEditorModal);
+  document.getElementById('de-reload').addEventListener('click', loadDataEditorRows);
+  document.getElementById('de-table').addEventListener('change', async () => {
+    try {
+      await loadDataEditorRows();
+    } catch (e) {
+      showDataEditorStatus(e.message, true);
+    }
+  });
+  document.getElementById('de-row').addEventListener('change', async () => {
+    try {
+      await loadDataEditorRecord();
+    } catch (e) {
+      showDataEditorStatus(e.message, true);
+    }
+  });
+  document.getElementById('de-save').addEventListener('click', saveDataEditorRecord);
+  document.getElementById('data-editor-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('data-editor-overlay')) closeDataEditorModal();
+  });
     const nameEl = document.getElementById('new-field-name');
     const typeEl = document.getElementById('new-field-type');
     const name = nameEl.value.trim();

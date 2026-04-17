@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 import json
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -293,6 +294,40 @@ def admin_required(f):
     return decorated
 
 
+ADMIN_DATA_MODELS = {
+    'users': {'model': User, 'label': 'Users', 'display': 'username'},
+    'recipes': {'model': Recipe, 'label': 'Recipes', 'display': 'name'},
+    'ingredients': {'model': Ingredient, 'label': 'Ingredients', 'display': 'name'},
+    'tools': {'model': Tool, 'label': 'Tools', 'display': 'name'},
+    'custom_field_defs': {'model': CustomFieldDef, 'label': 'Custom Field Definitions', 'display': 'name'},
+    'custom_field_values': {'model': CustomFieldValue, 'label': 'Custom Field Values', 'display': 'id'},
+    'recipe_ingredients': {'model': RecipeIngredient, 'label': 'Recipe Ingredients', 'display': 'id'},
+    'recipe_tools': {'model': RecipeTool, 'label': 'Recipe Tools', 'display': 'id'},
+    'recipe_garnishes': {'model': RecipeGarnish, 'label': 'Recipe Garnishes', 'display': 'id'},
+}
+
+
+def _model_columns(model):
+    return list(model.__table__.columns)
+
+
+def _record_to_dict(record, model):
+    data = {}
+    for column in _model_columns(model):
+        value = getattr(record, column.name)
+        if isinstance(value, datetime):
+            value = value.isoformat()
+        data[column.name] = value
+    return data
+
+
+def _data_model_or_404(table_name):
+    cfg = ADMIN_DATA_MODELS.get(table_name)
+    if not cfg:
+        return None, jsonify({'error': f'Unknown table: {table_name}'}), 404
+    return cfg, None, None
+
+
 # ── Frontend ─────────────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -331,6 +366,108 @@ def api_me():
     if current_user.is_authenticated:
         return jsonify({'username': current_user.username, 'role': current_user.role})
     return jsonify({'error': 'Not authenticated'}), 401
+
+
+# ── API: Admin Data Editor ─────────────────────────────────────────────────
+
+@app.route('/api/admin/data/tables', methods=['GET'])
+@login_required
+@admin_required
+def api_admin_data_tables():
+    tables = []
+    for key, cfg in ADMIN_DATA_MODELS.items():
+        model = cfg['model']
+        tables.append({
+            'key': key,
+            'label': cfg['label'],
+            'count': model.query.count(),
+        })
+    return jsonify(tables)
+
+
+@app.route('/api/admin/data/<table_name>/rows', methods=['GET'])
+@login_required
+@admin_required
+def api_admin_data_rows(table_name):
+    cfg, err_body, status = _data_model_or_404(table_name)
+    if not cfg:
+        return err_body, status
+
+    model = cfg['model']
+    display_col = cfg['display']
+    limit = min(max(int(request.args.get('limit', 300)), 1), 1000)
+    rows = model.query.order_by(model.id.desc()).limit(limit).all()
+
+    payload = []
+    for row in rows:
+        raw = getattr(row, display_col, row.id)
+        payload.append({
+            'id': row.id,
+            'label': str(raw) if raw is not None else f'#{row.id}',
+        })
+    return jsonify(payload)
+
+
+@app.route('/api/admin/data/<table_name>/rows/<int:row_id>', methods=['GET'])
+@login_required
+@admin_required
+def api_admin_data_row(table_name, row_id):
+    cfg, err_body, status = _data_model_or_404(table_name)
+    if not cfg:
+        return err_body, status
+
+    model = cfg['model']
+    row = model.query.get_or_404(row_id)
+    columns = _model_columns(model)
+    editable = [c.name for c in columns if c.name != 'id']
+    return jsonify({
+        'id': row.id,
+        'table': table_name,
+        'record': _record_to_dict(row, model),
+        'editable_fields': editable,
+    })
+
+
+@app.route('/api/admin/data/<table_name>/rows/<int:row_id>', methods=['PUT'])
+@login_required
+@admin_required
+def api_admin_update_row(table_name, row_id):
+    cfg, err_body, status = _data_model_or_404(table_name)
+    if not cfg:
+        return err_body, status
+
+    model = cfg['model']
+    row = model.query.get_or_404(row_id)
+    payload = request.get_json() or {}
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Payload must be an object'}), 400
+
+    fields = payload.get('fields', payload)
+    if not isinstance(fields, dict):
+        return jsonify({'error': 'fields must be an object'}), 400
+
+    columns = {c.name: c for c in _model_columns(model)}
+    if 'id' in fields and fields['id'] != row.id:
+        return jsonify({'error': 'id is immutable'}), 400
+
+    for key, value in fields.items():
+        if key == 'id':
+            continue
+        if key not in columns:
+            return jsonify({'error': f'Unknown field: {key}'}), 400
+
+        column = columns[key]
+        if value == '' and column.nullable:
+            value = None
+        setattr(row, key, value)
+
+    try:
+        db.session.commit()
+    except IntegrityError as exc:
+        db.session.rollback()
+        return jsonify({'error': f'Integrity error: {exc.orig}'}), 400
+
+    return jsonify({'ok': True, 'record': _record_to_dict(row, model)})
 
 
 # ── API: Recipes ──────────────────────────────────────────────────────────────
