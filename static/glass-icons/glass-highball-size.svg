@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
-<svg
+<svg preserveAspectRatio="xMidYMid meet"
    width="13.229167mm"
    height="13.229167mm"
    viewBox="0 0 13.229167 13.229167"
@@ -38,7 +38,7 @@
        clipPathUnits="userSpaceOnUse"
        id="clipPath2">
       <rect
-         style="fill:currentColor;fill-opacity:1;stroke:none;stroke-width:0.798899;stroke-linejoin:bevel;stroke-miterlimit:0;paint-order:fill markers stroke"
+         style="fill:#4C4741;fill-opacity:1;stroke:none;stroke-width:0.798899;stroke-linejoin:bevel;stroke-miterlimit:0;paint-order:fill markers stroke"
          id="rect3"
          width="7.1871619"
          height="9.9344101"
@@ -52,7 +52,7 @@
      id="layer1"
      transform="translate(-60.566414,-43.240601)">
     <rect
-       style="fill:currentColor;fill-opacity:1;stroke:none;stroke-width:0.7176;stroke-linejoin:bevel;stroke-miterlimit:0;paint-order:fill markers stroke"
+       style="fill:#4C4741;fill-opacity:1;stroke:none;stroke-width:0.7176;stroke-linejoin:bevel;stroke-miterlimit:0;paint-order:fill markers stroke"
        id="rect1"
        width="13.229167"
        height="13.229167"
@@ -60,7 +60,7 @@
        y="54.918739"
        ry="0" />
     <path
-       fill="currentColor"
+       fill="#4C4741"
        d="m 67.181262,54.524768 c 0,0 -1.972385,0.03385 -2.159627,-0.253358 -0.187242,-0.288268 -0.368665,-9.087041 -0.368665,-9.087041 h 5.056055 c 0,0 -0.180895,8.797715 -0.367608,9.085983 -0.186712,0.288267 -2.160155,0.254416 -2.160155,0.254416 z"
        id="path18"
        style="stroke-width:0.528931" />
