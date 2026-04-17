@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -91,11 +92,13 @@ class RecipeIngredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     recipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=False)
     ingredient_id = db.Column(db.Integer, db.ForeignKey('ingredients.id'), nullable=False)
+    subrecipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=True)
     amount = db.Column(db.Float)
     unit = db.Column(db.String(50), default='ml')
     order = db.Column(db.Integer, default=0)
-    recipe = db.relationship('Recipe', back_populates='recipe_ingredients')
+    recipe = db.relationship('Recipe', back_populates='recipe_ingredients', foreign_keys=[recipe_id])
     ingredient = db.relationship('Ingredient')
+    subrecipe = db.relationship('Recipe', foreign_keys=[subrecipe_id])
 
 
 class RecipeTool(db.Model):
@@ -111,6 +114,7 @@ class Recipe(db.Model):
     __tablename__ = 'recipes'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
+    score = db.Column(db.Integer, default=5, nullable=False)
     procedure = db.Column(db.Text, default='')
     notes = db.Column(db.Text, default='')
     image_filename = db.Column(db.String(256))
@@ -133,16 +137,26 @@ class Recipe(db.Model):
             'notes': self.notes or '',
             'image_filename': self.image_filename,
             'image_url': f'/uploads/{self.image_filename}' if self.image_filename else None,
+            'score': self.score,
             'ingredients': [
                 {
-                    'name': ri.ingredient.name,
+                    'ingredient_id': ri.ingredient_id,
+                    'ingredient_name': ri.ingredient.name,
                     'amount': ri.amount,
                     'unit': ri.unit or 'ml',
                     'order': ri.order,
+                    'subrecipe_id': ri.subrecipe_id,
+                    'subrecipe_name': ri.subrecipe.name if ri.subrecipe else None,
                 }
                 for ri in self.recipe_ingredients
             ],
-            'tools': [rt.tool.name for rt in self.recipe_tools],
+            'tools': [
+                {
+                    'tool_id': rt.tool_id,
+                    'tool_name': rt.tool.name,
+                }
+                for rt in self.recipe_tools
+            ],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'custom_fields': {str(cv.field_def_id): cv.value for cv in self.custom_values},
         }
@@ -229,6 +243,7 @@ def api_create_recipe():
 
     recipe = Recipe(
         name=data['name'].strip(),
+        score=int(data.get('score', 5)) if str(data.get('score', '')).strip() != '' else 5,
         procedure=data.get('procedure', '').strip(),
         notes=data.get('notes', '').strip(),
         image_filename=data.get('image_filename'),
@@ -250,6 +265,12 @@ def api_update_recipe(rid):
     data = request.get_json() or {}
 
     recipe.name = data.get('name', recipe.name).strip()
+    if 'score' in data:
+        try:
+            recipe.score = int(data['score'])
+        except (TypeError, ValueError):
+            recipe.score = recipe.score
+        recipe.score = max(1, min(10, recipe.score))
     recipe.procedure = data.get('procedure', recipe.procedure or '').strip()
     recipe.notes = data.get('notes', recipe.notes or '').strip()
     if 'image_filename' in data:
@@ -267,6 +288,46 @@ def api_update_recipe(rid):
     return jsonify(recipe.to_dict())
 
 
+@app.route('/api/bulk-import', methods=['POST'])
+@login_required
+@admin_required
+def api_bulk_import():
+    data = request.get_json()
+    if not isinstance(data, list):
+        return jsonify({'error': 'Expected a JSON array of recipes'}), 400
+
+    imported = 0
+    errors = []
+
+    for i, recipe_data in enumerate(data):
+        try:
+            if not isinstance(recipe_data, dict):
+                errors.append(f'Recipe {i+1}: Invalid format')
+                continue
+            if not recipe_data.get('name', '').strip():
+                errors.append(f'Recipe {i+1}: Name is required')
+                continue
+
+            recipe = Recipe(
+                name=recipe_data['name'].strip(),
+                score=int(recipe_data.get('score', 5)) if isinstance(recipe_data.get('score'), (int, float)) and 1 <= recipe_data.get('score', 5) <= 10 else 5,
+                procedure=recipe_data.get('procedure', '').strip(),
+                notes=recipe_data.get('notes', '').strip() if recipe_data.get('notes') else '',
+            )
+            db.session.add(recipe)
+            db.session.flush()
+            _sync_ingredients(recipe, recipe_data.get('ingredients', []))
+            _sync_tools(recipe, recipe_data.get('tools', []))
+            imported += 1
+        except Exception as e:
+            errors.append(f'Recipe {i+1}: {str(e)}')
+            db.session.rollback()
+            continue
+
+    db.session.commit()
+    return jsonify({'imported': imported, 'errors': errors}), 200 if imported > 0 else 400
+
+
 @app.route('/api/recipes/<int:rid>', methods=['DELETE'])
 @login_required
 @admin_required
@@ -276,26 +337,58 @@ def api_delete_recipe(rid):
     db.session.commit()
     return jsonify({'ok': True})
 
-
-def _sync_ingredients(recipe, ingredients_data):
     for i, ing in enumerate(ingredients_data):
-        name = (ing.get('name') or '').strip()
+        ingredient_id = ing.get('ingredient_id')
+        name = (ing.get('ingredient_name') or '').strip()
+        subrecipe_id = ing.get('subrecipe_id')
+
+        if ingredient_id is not None and ingredient_id != '':
+            try:
+                ingredient_id = int(ingredient_id)
+            except (TypeError, ValueError):
+                ingredient_id = None
+
+        if subrecipe_id is not None and subrecipe_id != '':
+            try:
+                subrecipe_id = int(subrecipe_id)
+            except (TypeError, ValueError):
+                subrecipe_id = None
+        else:
+            subrecipe_id = None
+
+        subrecipe = None
+        if subrecipe_id:
+            subrecipe = Recipe.query.get(subrecipe_id)
+            if not subrecipe or subrecipe.id == recipe.id:
+                subrecipe = None
+                subrecipe_id = None
+
+        if not name and subrecipe:
+            name = subrecipe.name
         if not name:
             continue
-        ingredient = Ingredient.query.filter_by(name=name).first()
+
+        ingredient = None
+        if ingredient_id:
+            ingredient = Ingredient.query.get(ingredient_id)
+        if not ingredient:
+            ingredient = Ingredient.query.filter_by(name=name).first()
         if not ingredient:
             ingredient = Ingredient(name=name)
             db.session.add(ingredient)
             db.session.flush()
+
         amount = ing.get('amount')
         if amount is not None:
             try:
                 amount = float(amount)
             except (TypeError, ValueError):
                 amount = None
+
         ri = RecipeIngredient(
             recipe_id=recipe.id,
             ingredient_id=ingredient.id,
+            subrecipe_id=subrecipe_id,
             amount=amount,
             unit=(ing.get('unit') or 'ml').strip(),
             order=i,
@@ -304,15 +397,32 @@ def _sync_ingredients(recipe, ingredients_data):
 
 
 def _sync_tools(recipe, tools_data):
-    for tool_name in tools_data:
-        name = (tool_name if isinstance(tool_name, str) else tool_name.get('name', '')).strip()
-        if not name:
-            continue
-        tool = Tool.query.filter_by(name=name).first()
-        if not tool:
+    for tool_item in tools_data:
+        tool_id = None
+        name = ''
+        if isinstance(tool_item, dict):
+            tool_id = tool_item.get('tool_id')
+            name = (tool_item.get('tool_name') or '').strip()
+        else:
+            name = (tool_item or '').strip()
+
+        if tool_id is not None and tool_id != '':
+            try:
+                tool_id = int(tool_id)
+            except (TypeError, ValueError):
+                tool_id = None
+
+        tool = None
+        if tool_id:
+            tool = Tool.query.get(tool_id)
+        if not tool and name:
+            tool = Tool.query.filter_by(name=name).first()
+        if not tool and name:
             tool = Tool(name=name)
             db.session.add(tool)
             db.session.flush()
+        if not tool:
+            continue
         db.session.add(RecipeTool(recipe_id=recipe.id, tool_id=tool.id))
 
 
@@ -387,13 +497,13 @@ def api_delete_field(fid):
 @app.route('/api/ingredients')
 @login_required
 def api_ingredients():
-    return jsonify([i.name for i in Ingredient.query.order_by(Ingredient.name).all()])
+    return jsonify([{'id': i.id, 'name': i.name} for i in Ingredient.query.order_by(Ingredient.name).all()])
 
 
 @app.route('/api/tools')
 @login_required
 def api_tools():
-    return jsonify([t.name for t in Tool.query.order_by(Tool.name).all()])
+    return jsonify([{'id': t.id, 'name': t.name} for t in Tool.query.order_by(Tool.name).all()])
 
 
 # ── API: Image Upload ─────────────────────────────────────────────────────────
@@ -420,6 +530,15 @@ def api_upload():
 
 with app.app_context():
     db.create_all()
+    recipe_columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipes')]
+    if 'score' not in recipe_columns:
+        db.session.execute(text('ALTER TABLE recipes ADD COLUMN score INTEGER DEFAULT 5'))
+        db.session.execute(text('UPDATE recipes SET score=5 WHERE score IS NULL'))
+        db.session.commit()
+    columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipe_ingredients')]
+    if 'subrecipe_id' not in columns:
+        db.session.execute(text('ALTER TABLE recipe_ingredients ADD COLUMN subrecipe_id INTEGER'))
+        db.session.commit()
 
     def _seed(username_env, password_env, default_u, default_p, role):
         uname = os.environ.get(username_env, default_u)

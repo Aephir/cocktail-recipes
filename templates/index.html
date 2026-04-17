@@ -47,6 +47,7 @@
     <div class="hdr-end">
       <span id="user-pill"></span>
       <button id="fields-btn" class="btn btn-ghost btn-sm admin-only hidden" title="Manage custom fields">⚙ Fields</button>
+      <button id="bulk-import-btn" class="btn btn-accent admin-only hidden">Bulk Import</button>
       <button id="new-btn" class="btn btn-accent admin-only hidden">+ New Recipe</button>
       <button id="logout-btn" class="btn btn-ghost">Sign out</button>
     </div>
@@ -57,6 +58,16 @@
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-inner">
+        <section class="filter-group sort-group">
+          <div class="sort-row">
+            <label for="sort-by" class="sort-label">Sort by</label>
+            <select id="sort-by" class="sort-select">
+              <option value="rating">Rating</option>
+              <option value="alphabetic">Alphabetic</option>
+              <option value="newest">Newest</option>
+            </select>
+          </div>
+        </section>
         <section class="filter-group">
           <h4 class="filter-label">Ingredients <span id="ing-total" class="filter-num"></span></h4>
           <div id="ing-list" class="filter-list"></div>
@@ -116,6 +127,22 @@
       </div>
 
       <div class="field">
+        <label>Rating</label>
+        <select id="f-score" name="score">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5" selected>5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+
+      <div class="field">
         <label>Image</label>
         <div id="drop-area" class="drop-area">
           <input id="f-image" type="file" accept="image/*" class="hidden">
@@ -131,7 +158,7 @@
       <div class="field">
         <label>Ingredients</label>
         <div class="ing-header-row">
-          <span>Amount</span><span>Unit</span><span>Name</span><span></span>
+          <span>Amount</span><span>Unit</span><span>Name</span><span>Recipe</span><span></span>
         </div>
         <div id="f-ings" class="ings-list"></div>
         <button id="add-ing" class="btn btn-ghost btn-sm" type="button">+ Add ingredient</button>
@@ -161,6 +188,7 @@
 
   <!-- Datalists -->
   <datalist id="ing-opts"></datalist>
+  <datalist id="recipe-opts"></datalist>
   <datalist id="unit-opts">
     <option value="ml">
     <option value="cl">
@@ -202,6 +230,27 @@
     </div>
     <div class="modal-ftr">
       <button id="fields-done" class="btn btn-primary">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ░░ BULK IMPORT MODAL ░░ -->
+<div id="bulk-import-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="form-modal" style="max-width:600px">
+    <div class="modal-hdr">
+      <h2 class="modal-title">Bulk Import Recipes</h2>
+      <button id="bulk-import-close" class="icon-btn" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M1 1l16 16M17 1L1 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="bulk-import-hint">Paste JSON array of recipes below. Use AI to parse messy data first (see README for prompt).</p>
+      <textarea id="bulk-import-json" rows="12" placeholder='[{"name": "Recipe Name", "score": 5, "ingredients": [{"amount": 2, "unit": "oz", "ingredient_name": "gin"}], "tools": ["shaker"], "procedure": "Mix and serve", "notes": "Optional"}]' style="width: 100%; font-family: monospace;"></textarea>
+      <div id="bulk-import-result" class="hidden" style="margin-top: 10px; padding: 10px; border-radius: 4px;"></div>
+    </div>
+    <div class="modal-ftr">
+      <button id="bulk-import-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="bulk-import-submit" class="btn btn-primary">Import</button>
     </div>
   </div>
 </div>

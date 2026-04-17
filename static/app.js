@@ -8,6 +8,8 @@
 const S = {
   user: null,
   recipes: [],
+  ingredients: [],
+  tools: [],
   customFields: [],     // CustomFieldDef list
   activeIngs: new Set(),
   activeTools: new Set(),
@@ -123,21 +125,35 @@ function applyFilters() {
 
   if (S.activeIngs.size) {
     list = list.filter(r => {
-      const names = new Set(r.ingredients.map(i => i.name));
+      const names = new Set(r.ingredients.map(i => i.ingredient_name));
       return [...S.activeIngs].every(n => names.has(n));
     });
   }
 
   if (S.activeTools.size) {
     list = list.filter(r => {
-      const names = new Set(r.tools);
+      const names = new Set(r.tools.map(t => t.tool_name));
       return [...S.activeTools].every(n => names.has(n));
     });
   }
 
+  list = sortRecipes(list);
   renderCards(list);
   renderActivePills();
   updateSidebarCounts(list);
+}
+
+function sortRecipes(list) {
+  const sortKey = document.getElementById('sort-by')?.value || 'rating';
+  return [...list].sort((a, b) => {
+    if (sortKey === 'alphabetic') {
+      return a.name.localeCompare(b.name);
+    }
+    if (sortKey === 'newest') {
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    }
+    return (b.score || 0) - (a.score || 0);
+  });
 }
 
 function toggleIng(name) {
@@ -166,8 +182,8 @@ function buildSidebar() {
   const ingCounts = new Map();
   const toolCounts = new Map();
   for (const r of S.recipes) {
-    r.ingredients.forEach(i => ingCounts.set(i.name, (ingCounts.get(i.name) || 0) + 1));
-    r.tools.forEach(t => toolCounts.set(t, (toolCounts.get(t) || 0) + 1));
+    r.ingredients.forEach(i => ingCounts.set(i.ingredient_name, (ingCounts.get(i.ingredient_name) || 0) + 1));
+    r.tools.forEach(t => toolCounts.set(t.tool_name, (toolCounts.get(t.tool_name) || 0) + 1));
   }
 
   const sortedIngs = [...ingCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
@@ -206,8 +222,8 @@ function updateSidebarCounts(filtered) {
   const ingCounts = new Map();
   const toolCounts = new Map();
   for (const r of filtered) {
-    r.ingredients.forEach(i => ingCounts.set(i.name, (ingCounts.get(i.name) || 0) + 1));
-    r.tools.forEach(t => toolCounts.set(t, (toolCounts.get(t) || 0) + 1));
+    r.ingredients.forEach(i => ingCounts.set(i.ingredient_name, (ingCounts.get(i.ingredient_name) || 0) + 1));
+    r.tools.forEach(t => toolCounts.set(t.tool_name, (toolCounts.get(t.tool_name) || 0) + 1));
   }
   document.querySelectorAll('#ing-list .fchip').forEach(btn => {
     btn.querySelector('.chip-ct').textContent = ingCounts.get(btn.dataset.name) || 0;
@@ -256,16 +272,21 @@ function renderCards(list) {
       : `<div class="card-thumb-placeholder">◈</div>`;
 
     const tags = r.ingredients.slice(0, 3)
-      .map(i => `<span class="ctag${S.activeIngs.has(i.name) ? ' active' : ''}">${esc(i.name)}</span>`)
+      .map(i => `<span class="ctag${S.activeIngs.has(i.ingredient_name) ? ' active' : ''}">${esc(i.ingredient_name)}</span>`)
       .join('');
     const more = r.ingredients.length > 3
       ? `<span class="ctag">+${r.ingredients.length - 3}</span>` : '';
+
+    const scoreLabel = r.score != null ? `<div class="card-score">${esc(r.score)}/10</div>` : '';
 
     return `
       <div class="recipe-card" data-id="${r.id}">
         <div class="card-thumb">${thumbHtml}</div>
         <div class="card-body">
-          <div class="card-name">${esc(r.name)}</div>
+          <div class="card-head">
+            <div class="card-name">${esc(r.name)}</div>
+            ${scoreLabel}
+          </div>
           <div class="card-tags">${tags}${more}</div>
           <div class="card-meta">${r.ingredients.length} ingredient${r.ingredients.length !== 1 ? 's' : ''}</div>
         </div>
@@ -294,17 +315,23 @@ function renderDetail(recipe) {
     ? `<img class="detail-image" src="${esc(recipe.image_url)}" alt="${esc(recipe.name)}">`
     : '';
 
-  const ingRows = recipe.ingredients.map((i, idx) => `
+  const ingRows = recipe.ingredients.map((i, idx) => {
+    const dispName = i.subrecipe_name || i.ingredient_name;
+    const nameHtml = i.subrecipe_id
+      ? `<a href="#" class="recipe-link" data-rid="${i.subrecipe_id}">${esc(dispName)}</a>`
+      : esc(dispName);
+    return `
     <tr>
       <td class="itd-amt" data-ing-idx="${idx}" data-unit="${esc(i.unit)}" data-base="${i.amount ?? ''}">${
         i.amount != null ? fmtAmount(i.amount, i.unit, S.scale) : ''
       }</td>
       <td class="itd-unit">${i.amount != null ? esc(i.unit) : ''}</td>
-      <td class="itd-name">${esc(i.name)}</td>
-    </tr>`).join('');
+      <td class="itd-name">${nameHtml}</td>
+    </tr>`;
+  }).join('');
 
   const toolsHtml = recipe.tools.length
-    ? recipe.tools.map(t => `<span class="tool-chip">${esc(t)}</span>`).join('')
+    ? recipe.tools.map(t => `<span class="tool-chip">${esc(t.tool_name)}</span>`).join('')
     : '<span style="color:var(--text-muted)">—</span>';
 
   const vol = totalMl(recipe, S.scale);
@@ -313,6 +340,7 @@ function renderDetail(recipe) {
     ${imgHtml}
     <div class="detail-inner">
       <h1 class="detail-name">${esc(recipe.name)}</h1>
+      ${recipe.score != null ? `<div class="detail-score">Rating ${esc(recipe.score)}/10</div>` : ''}
 
       <div class="servings-row">
         <span class="servings-lbl">Servings</span>
@@ -331,7 +359,13 @@ function renderDetail(recipe) {
       ${recipe.procedure ? `
       <div class="dsec">
         <div class="dsec-title">Procedure</div>
-        <div class="detail-prose">${esc(recipe.procedure)}</div>
+        <div class="detail-prose"><ol>${recipe.procedure
+          .replace(/\r/g, '')
+          .split('\n')
+          .map(line => line.trim())
+          .filter(Boolean)
+          .map(line => `<li>${esc(line)}</li>`)
+          .join('')}</ol></div>
       </div>` : ''}
 
       ${recipe.notes ? `
@@ -350,6 +384,14 @@ function renderDetail(recipe) {
         ${recipe.created_at ? ' · Added ' + new Date(recipe.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : ''}
       </div>
     </div>`;
+
+  document.querySelectorAll('.recipe-link').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      const rid = Number(el.dataset.rid);
+      if (rid) openRecipe(rid);
+    });
+  });
 
   // Inject custom fields into appropriate section if any have values
   const customSection = buildDetailCustomFields(recipe);
@@ -432,8 +474,9 @@ async function openEditForm() {
     document.getElementById('remove-img').classList.remove('hidden');
   }
 
-  recipe.ingredients.forEach(i => addIngRow(i.amount ?? '', i.unit, i.name));
-  recipe.tools.forEach(t => addToolRow(t));
+  recipe.ingredients.forEach(i => addIngRow(i.amount ?? '', i.unit, i.ingredient_name, i.subrecipe_name || '', i.subrecipe_id ?? '', i.ingredient_id ?? ''));
+  recipe.tools.forEach(t => addToolRow(t.tool_name, t.tool_id ?? ''));
+  document.getElementById('f-score').value = recipe.score != null ? String(recipe.score) : '5';
 
   await populateAutocomplete();
   renderFormCustomFields(recipe);
@@ -474,6 +517,7 @@ function renderFormCustomFields(recipe) {
 
 function resetForm() {
   document.getElementById('f-name').value = '';
+  document.getElementById('f-score').value = '5';
   document.getElementById('f-proc').value = '';
   document.getElementById('f-notes').value = '';
   document.getElementById('f-ings').innerHTML = '';
@@ -498,30 +542,55 @@ async function populateAutocomplete() {
       api('GET', '/api/ingredients'),
       api('GET', '/api/tools'),
     ]);
-    document.getElementById('ing-opts').innerHTML = ings.map(n => `<option value="${esc(n)}">`).join('');
-    document.getElementById('tool-opts').innerHTML = tools.map(n => `<option value="${esc(n)}">`).join('');
+    document.getElementById('ing-opts').innerHTML = ings.map(i => `<option value="${esc(i.name)}">`).join('');
+    document.getElementById('tool-opts').innerHTML = tools.map(t => `<option value="${esc(t.name)}">`).join('');
+    document.getElementById('recipe-opts').innerHTML = S.recipes.map(r => `<option value="${esc(r.name)}">`).join('');
+    S.ingredients = ings;
+    S.tools = tools;
   } catch { /* non-critical */ }
 }
 
-function addIngRow(amount = '', unit = 'ml', name = '') {
+function addIngRow(amount = '', unit = 'ml', name = '', subrecipeName = '', subrecipeId = '', ingredientId = '') {
   const row = document.createElement('div');
   row.className = 'ing-row';
   row.innerHTML = `
     <input type="number" class="f-ing-amt" value="${esc(String(amount))}" placeholder="Amt" step="any" min="0">
     <input type="text"   class="f-ing-unit" value="${esc(unit)}" placeholder="Unit" list="unit-opts">
     <input type="text"   class="f-ing-name" value="${esc(name)}" placeholder="Name" list="ing-opts">
+    <input type="hidden" class="f-ing-ingredient-id" value="${esc(String(ingredientId))}">
+    <input type="text"   class="f-ing-recipe" value="${esc(subrecipeName)}" placeholder="Recipe" list="recipe-opts">
+    <input type="hidden" class="f-ing-subrecipe-id" value="${esc(String(subrecipeId))}">
     <button class="rm-btn" type="button" title="Remove">×</button>`;
   row.querySelector('.rm-btn').addEventListener('click', () => row.remove());
+  const recipeInput = row.querySelector('.f-ing-recipe');
+  const subrecipeIdInput = row.querySelector('.f-ing-subrecipe-id');
+  const nameInput = row.querySelector('.f-ing-name');
+  const ingredientIdInput = row.querySelector('.f-ing-ingredient-id');
+  recipeInput.addEventListener('input', () => {
+    const match = S.recipes.find(r => r.name.toLowerCase() === recipeInput.value.trim().toLowerCase());
+    subrecipeIdInput.value = match ? String(match.id) : '';
+  });
+  nameInput.addEventListener('input', () => {
+    const match = S.ingredients.find(i => i.name.toLowerCase() === nameInput.value.trim().toLowerCase());
+    ingredientIdInput.value = match ? String(match.id) : '';
+  });
   document.getElementById('f-ings').appendChild(row);
 }
 
-function addToolRow(name = '') {
+function addToolRow(name = '', toolId = '') {
   const row = document.createElement('div');
   row.className = 'tool-row';
   row.innerHTML = `
     <input type="text" class="f-tool-name" value="${esc(name)}" placeholder="Tool name" list="tool-opts">
+    <input type="hidden" class="f-tool-id" value="${esc(String(toolId))}">
     <button class="rm-btn" type="button" title="Remove">×</button>`;
   row.querySelector('.rm-btn').addEventListener('click', () => row.remove());
+  const nameInput = row.querySelector('.f-tool-name');
+  const toolIdInput = row.querySelector('.f-tool-id');
+  nameInput.addEventListener('input', () => {
+    const match = S.tools.find(t => t.name.toLowerCase() === nameInput.value.trim().toLowerCase());
+    toolIdInput.value = match ? String(match.id) : '';
+  });
   document.getElementById('f-tools').appendChild(row);
 }
 
@@ -534,19 +603,28 @@ async function saveRecipe() {
     const amtStr = row.querySelector('.f-ing-amt').value.trim();
     const unit   = row.querySelector('.f-ing-unit').value.trim() || 'ml';
     const iName  = row.querySelector('.f-ing-name').value.trim();
-    if (iName) {
+    const recipeName = row.querySelector('.f-ing-recipe').value.trim();
+    const subrecipeId = row.querySelector('.f-ing-subrecipe-id').value.trim();
+    const ingredientId = row.querySelector('.f-ing-ingredient-id').value.trim();
+    if (iName || recipeName) {
       ingredients.push({
         amount: amtStr !== '' ? parseFloat(amtStr) : null,
         unit,
-        name: iName,
+        ingredient_id: ingredientId || null,
+        ingredient_name: iName || recipeName,
+        subrecipe_id: subrecipeId || null,
       });
     }
   });
 
   const tools = [];
-  document.querySelectorAll('.f-tool-name').forEach(input => {
-    const t = input.value.trim();
-    if (t) tools.push(t);
+  document.querySelectorAll('.tool-row').forEach(row => {
+    const t = row.querySelector('.f-tool-name').value.trim();
+    const toolId = row.querySelector('.f-tool-id').value.trim();
+    if (t) tools.push({
+      tool_id: toolId || null,
+      tool_name: t,
+    });
   });
 
   const custom_fields = {};
@@ -557,6 +635,7 @@ async function saveRecipe() {
 
   const payload = {
     name,
+    score: parseInt(document.getElementById('f-score').value, 10) || null,
     procedure: document.getElementById('f-proc').value.trim(),
     notes: document.getElementById('f-notes').value.trim(),
     ingredients,
@@ -676,6 +755,65 @@ function renderFieldsList() {
       </div>
       <button class="rm-btn" data-del-field="${f.id}" title="Delete field">×</button>
     </div>`).join('');
+}
+
+/* ── Bulk Import Modal ─────────────────────────────────────────────────── */
+function openBulkImportModal() {
+  document.getElementById('bulk-import-json').value = '';
+  document.getElementById('bulk-import-result').classList.add('hidden');
+  document.getElementById('bulk-import-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('bulk-import-json').focus();
+}
+
+function closeBulkImportModal() {
+  document.getElementById('bulk-import-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+async function submitBulkImport() {
+  const jsonText = document.getElementById('bulk-import-json').value.trim();
+  if (!jsonText) {
+    alert('Please enter JSON data.');
+    return;
+  }
+
+  let data;
+  try {
+    data = JSON.parse(jsonText);
+  } catch (e) {
+    alert('Invalid JSON: ' + e.message);
+    return;
+  }
+
+  if (!Array.isArray(data)) {
+    alert('Data must be a JSON array of recipes.');
+    return;
+  }
+
+  const btn = document.getElementById('bulk-import-submit');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+
+  try {
+    const result = await api('POST', '/api/bulk-import', data);
+    const resultEl = document.getElementById('bulk-import-result');
+    resultEl.classList.remove('hidden');
+    resultEl.className = result.imported > 0 ? 'alert-success' : 'alert-error';
+    resultEl.innerHTML = `
+      <strong>Imported: ${result.imported}</strong><br>
+      ${result.errors.length ? 'Errors:<br>' + result.errors.map(e => `• ${e}`).join('<br>') : ''}
+    `;
+    if (result.imported > 0) {
+      await loadData();
+      document.getElementById('bulk-import-json').value = '';
+    }
+  } catch (e) {
+    alert(`Import failed: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Import';
+  }
 }
 
 /* ── Delete ─────────────────────────────────────────────────────────────── */
@@ -802,6 +940,8 @@ document.addEventListener('DOMContentLoaded', () => {
     searchTimer = setTimeout(() => { S.search = e.target.value; applyFilters(); }, 180);
   });
 
+  document.getElementById('sort-by').addEventListener('change', () => applyFilters());
+
   /* ─ Recipe grid clicks ─ */
   document.getElementById('grid').addEventListener('click', e => {
     const card = e.target.closest('.recipe-card');
@@ -908,6 +1048,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     );
   });
+
+  /* ─ Bulk Import modal ─ */
+  document.getElementById('bulk-import-btn').addEventListener('click', openBulkImportModal);
+  document.getElementById('bulk-import-close').addEventListener('click', closeBulkImportModal);
+  document.getElementById('bulk-import-cancel').addEventListener('click', closeBulkImportModal);
+  document.getElementById('bulk-import-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('bulk-import-overlay')) closeBulkImportModal();
+  });
+  document.getElementById('bulk-import-submit').addEventListener('click', submitBulkImport);
 
   /* ─ Boot ─ */
   init();

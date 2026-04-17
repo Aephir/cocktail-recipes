@@ -14,7 +14,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      USER_USERNAME: ${USER_USERNAME:-guest}
+      USER_USERNAME: ${USER_USERNAME:-user}
       USER_PASSWORD: ${USER_PASSWORD}
     restart: unless-stopped
     healthcheck:
