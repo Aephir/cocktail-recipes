@@ -548,6 +548,16 @@ def _sync_tools(recipe, tools_data):
         tool = None
         if tool_id:
             tool = Tool.query.get(tool_id)
+            if tool and name and tool.name != name:
+                # If the tool id points to an existing tool but the user changed the name,
+                # link to the tool record with the new name instead of keeping the old tool.
+                existing = Tool.query.filter_by(name=name).first()
+                if existing:
+                    tool = existing
+                else:
+                    tool = Tool(name=name)
+                    db.session.add(tool)
+                    db.session.flush()
         if not tool and name:
             tool = Tool.query.filter_by(name=name).first()
         if not tool and name:
