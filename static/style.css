@@ -489,6 +489,7 @@ textarea { resize: vertical; min-height: 80px; }
   height: 100%;
   object-fit: cover;
   transition: transform .4s ease;
+  color: var(--text);
 }
 .recipe-card:hover .card-thumb img { transform: scale(1.04); }
 
@@ -602,6 +603,7 @@ textarea { resize: vertical; min-height: 80px; }
   max-height: 260px;
   object-fit: cover;
   display: block;
+  color: var(--text);
 }
 
 .detail-inner { padding: 28px 28px 40px; }

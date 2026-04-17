@@ -16,6 +16,14 @@ CLASSIFICATION_CATEGORIES = [
 ]
 COCKTAIL_SUBTYPES = ['Sour', 'Aromatic', 'Old-Fashioned', 'Improved', 'Daisy']
 
+GLASS_ICON_LOOKUP = [
+    (['champagne saucer', 'champagne glass', 'saucer'], 'glass-champagne-saucer-size.svg'),
+    (['collins'], 'glass-collins-size.svg'),
+    (['highball'], 'glass-highball-size.svg'),
+    (['nick-and-nora', 'nick and nora'], 'glass-nick-and-nora-size.svg'),
+    (['old-fashioned', 'old fashioned', 'whisky tumbler', 'whiskey tumbler', 'tumbler'], 'glass-old-fashioned-size.svg'),
+]
+
 LEGACY_CLASSIFICATION_MAP = {
     'sour': ('Cocktail', 'Sour'),
     'aromatic': ('Cocktail', 'Aromatic'),
@@ -39,6 +47,16 @@ def parse_tags(value):
         except Exception:
             return [part.strip() for part in value.split(',') if part.strip()]
     return []
+
+
+def choose_glass_icon(tools):
+    tool_names = [str(tool.tool.name or '').strip().lower() for tool in tools]
+    for aliases, filename in GLASS_ICON_LOOKUP:
+        for alias in aliases:
+            for tool_name in tool_names:
+                if re.search(rf'\b{re.escape(alias)}\b', tool_name):
+                    return filename
+    return None
 
 
 def format_tags(tags):
@@ -198,13 +216,18 @@ class Recipe(db.Model):
     custom_values = db.relationship('CustomFieldValue', back_populates='recipe', cascade='all, delete-orphan')
 
     def to_dict(self):
+        image_url = f'/uploads/{self.image_filename}' if self.image_filename else None
+        if not image_url:
+            icon_file = choose_glass_icon(self.recipe_tools)
+            image_url = f'/static/glass-icons/{icon_file}' if icon_file else None
+
         return {
             'id': self.id,
             'name': self.name,
             'procedure': self.procedure or '',
             'notes': self.notes or '',
             'image_filename': self.image_filename,
-            'image_url': f'/uploads/{self.image_filename}' if self.image_filename else None,
+            'image_url': image_url,
             'score': self.score,
             'ingredients': [
                 {

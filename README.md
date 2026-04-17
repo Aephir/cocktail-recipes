@@ -36,12 +36,12 @@ A private, web-based cocktail recipe database. Manage your collection of cocktai
 The app will automatically create the database and seed users on first run.
 
 ### Version
-Current release: `v0.0.3`
+Current release: `v0.0.4`
 
 We use releases with standard versioning (vX.Y.Z). There will also be a tag=stable.
 
 #### Use the tag in Portainer
-- In the stack settings, set the Git reference to the tag name instead of `main` (e.g., `refs/heads/v0.0.3`, `refs/heads/v0.1.0`, or `refs/heads/stable`)
+- In the stack settings, set the Git reference to the tag name instead of `main` (e.g., `refs/heads/v0.0.4`, `refs/heads/v0.1.0`, or `refs/heads/stable`)
 - Redeploy the stack
 
 
