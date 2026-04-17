@@ -92,7 +92,7 @@ class RecipeIngredient(db.Model):
     __tablename__ = 'recipe_ingredients'
     id = db.Column(db.Integer, primary_key=True)
     recipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=False)
-    ingredient_id = db.Column(db.Integer, db.ForeignKey('ingredients.id'), nullable=False)
+    ingredient_id = db.Column(db.Integer, db.ForeignKey('ingredients.id'), nullable=True)
     subrecipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=True)
     amount = db.Column(db.Float)
     unit = db.Column(db.String(50), default='ml')
@@ -441,6 +441,69 @@ def _sync_tools(recipe, tools_data):
         if not tool:
             continue
         db.session.add(RecipeTool(recipe_id=recipe.id, tool_id=tool.id))
+
+
+def _sync_ingredients(recipe, ingredients_data):
+    for i, ing_item in enumerate(ingredients_data):
+        ingredient_id = None
+        subrecipe_id = None
+        name = ''
+        amount = None
+        unit = 'ml'
+        if isinstance(ing_item, dict):
+            ingredient_id = ing_item.get('ingredient_id')
+            subrecipe_id = ing_item.get('subrecipe_id')
+            name = (ing_item.get('ingredient_name') or '').strip()
+            amount = ing_item.get('amount')
+            unit = (ing_item.get('unit') or 'ml').strip()
+        else:
+            name = (ing_item or '').strip()
+
+        if ingredient_id is not None and ingredient_id != '':
+            try:
+                ingredient_id = int(ingredient_id)
+            except (TypeError, ValueError):
+                ingredient_id = None
+        if subrecipe_id is not None and subrecipe_id != '':
+            try:
+                subrecipe_id = int(subrecipe_id)
+            except (TypeError, ValueError):
+                subrecipe_id = None
+
+        if subrecipe_id:
+            subrecipe = Recipe.query.get(subrecipe_id)
+            if not subrecipe:
+                continue
+            ri = RecipeIngredient(
+                recipe_id=recipe.id,
+                ingredient_id=None,
+                subrecipe_id=subrecipe_id,
+                amount=amount,
+                unit=unit,
+                order=i,
+            )
+            db.session.add(ri)
+        else:
+            ingredient = None
+            if ingredient_id:
+                ingredient = Ingredient.query.get(ingredient_id)
+            if not ingredient and name:
+                ingredient = Ingredient.query.filter_by(name=name).first()
+            if not ingredient and name:
+                ingredient = Ingredient(name=name)
+                db.session.add(ingredient)
+                db.session.flush()
+            if not ingredient:
+                continue
+            ri = RecipeIngredient(
+                recipe_id=recipe.id,
+                ingredient_id=ingredient.id,
+                subrecipe_id=None,
+                amount=amount,
+                unit=unit,
+                order=i,
+            )
+            db.session.add(ri)
 
 
 def _sync_custom_fields(recipe, custom_fields_data):
