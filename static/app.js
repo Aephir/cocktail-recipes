@@ -16,6 +16,11 @@ const S = {
   activeCategories: new Set(),
   activeSubtypes: new Set(),
   activeTags: new Set(),
+  filterModeIngs: 'all',
+  filterModeTools: 'all',
+  filterModeCategories: 'all',
+  filterModeSubtypes: 'all',
+  filterModeTags: 'all',
   search: '',
   currentId: null,
   editingId: null,
@@ -180,6 +185,7 @@ async function loadData() {
   S.recipes = recipes;
   S.customFields = fields;
   buildSidebar();
+  updateFilterModeButtons();
   applyFilters();
 }
 
@@ -201,28 +207,48 @@ function applyFilters() {
   }
 
   if (S.activeCategories.size) {
-    list = list.filter(r => S.activeCategories.has(r.category));
+    if (S.filterModeCategories === 'all') {
+      list = list.filter(r => [...S.activeCategories].every(cat => r.category === cat));
+    } else {
+      list = list.filter(r => S.activeCategories.has(r.category));
+    }
   }
 
   if (S.activeSubtypes.size) {
-    list = list.filter(r => r.subtype && S.activeSubtypes.has(r.subtype));
+    if (S.filterModeSubtypes === 'all') {
+      list = list.filter(r => [...S.activeSubtypes].every(sub => r.subtype === sub));
+    } else {
+      list = list.filter(r => r.subtype && S.activeSubtypes.has(r.subtype));
+    }
   }
 
   if (S.activeTags.size) {
-    list = list.filter(r => (r.tags || []).some(tag => S.activeTags.has(tag)));
+    if (S.filterModeTags === 'all') {
+      list = list.filter(r => (r.tags || []).every(tag => S.activeTags.has(tag)));
+    } else {
+      list = list.filter(r => (r.tags || []).some(tag => S.activeTags.has(tag)));
+    }
   }
 
   if (S.activeIngs.size) {
     list = list.filter(r => {
       const names = new Set(r.ingredients.map(i => i.ingredient_name));
-      return [...S.activeIngs].every(n => names.has(n));
+      if (S.filterModeIngs === 'all') {
+        return [...S.activeIngs].every(n => names.has(n));
+      } else {
+        return [...S.activeIngs].some(n => names.has(n));
+      }
     });
   }
 
   if (S.activeTools.size) {
     list = list.filter(r => {
       const names = new Set(r.tools.map(t => t.tool_name));
-      return [...S.activeTools].every(n => names.has(n));
+      if (S.filterModeTools === 'all') {
+        return [...S.activeTools].every(n => names.has(n));
+      } else {
+        return [...S.activeTools].some(n => names.has(n));
+      }
     });
   }
 
@@ -275,16 +301,16 @@ function toggleTag(name) {
   applyFilters();
 }
 
-function clearAllFilters() {
-  S.activeIngs.clear();
-  S.activeTools.clear();
-  S.activeCategories.clear();
-  S.activeSubtypes.clear();
-  S.activeTags.clear();
-  S.search = '';
-  document.getElementById('search-input').value = '';
-  refreshChipStates();
-  applyFilters();
+function updateFilterModeButtons() {
+  const groups = ['ings', 'tools', 'categories', 'subtypes', 'tags'];
+  groups.forEach(group => {
+    const toggle = document.querySelector(`.filter-mode-toggle[data-group="${group}"]`);
+    if (!toggle) return;
+    const mode = S[`filterMode${group.charAt(0).toUpperCase() + group.slice(1)}`];
+    toggle.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+  });
 }
 
 /* ── Sidebar ────────────────────────────────────────────────────────────── */
@@ -1168,6 +1194,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chip) toggleTag(chip.dataset.name);
   });
   document.getElementById('clear-btn').addEventListener('click', clearAllFilters);
+
+  /* ─ Filter mode toggles ─ */
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.mode-btn');
+    if (btn) {
+      const toggle = btn.closest('.filter-mode-toggle');
+      const group = toggle.dataset.group;
+      const mode = btn.dataset.mode;
+      S[`filterMode${group.charAt(0).toUpperCase() + group.slice(1)}`] = mode;
+      updateFilterModeButtons();
+      applyFilters();
+    }
+  });
 
   /* ─ Active pills removal ─ */
   document.getElementById('active-pills').addEventListener('click', e => {

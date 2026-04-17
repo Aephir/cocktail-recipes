@@ -82,23 +82,58 @@
           </div>
         </section>
         <section class="filter-group">
-          <h4 class="filter-label">Ingredients <span id="ing-total" class="filter-num"></span></h4>
+          <h4 class="filter-label">
+            <span>Ingredients</span>
+            <div class="filter-mode-toggle" data-group="ings">
+              <button class="mode-btn active" data-mode="all">All</button>
+              <button class="mode-btn" data-mode="any">Any</button>
+            </div>
+            <span id="ing-total" class="filter-num"></span>
+          </h4>
           <div id="ing-list" class="filter-list"></div>
         </section>
         <section class="filter-group">
-          <h4 class="filter-label">Tools <span id="tool-total" class="filter-num"></span></h4>
+          <h4 class="filter-label">
+            <span>Tools</span>
+            <div class="filter-mode-toggle" data-group="tools">
+              <button class="mode-btn active" data-mode="all">All</button>
+              <button class="mode-btn" data-mode="any">Any</button>
+            </div>
+            <span id="tool-total" class="filter-num"></span>
+          </h4>
           <div id="tool-list" class="filter-list"></div>
         </section>
         <section class="filter-group">
-          <h4 class="filter-label">Category <span id="cat-total" class="filter-num"></span></h4>
+          <h4 class="filter-label">
+            <span>Category</span>
+            <div class="filter-mode-toggle" data-group="categories">
+              <button class="mode-btn active" data-mode="all">All</button>
+              <button class="mode-btn" data-mode="any">Any</button>
+            </div>
+            <span id="cat-total" class="filter-num"></span>
+          </h4>
           <div id="cat-list" class="filter-list"></div>
         </section>
         <section class="filter-group">
-          <h4 class="filter-label">Subtype <span id="subtype-total" class="filter-num"></span></h4>
+          <h4 class="filter-label">
+            <span>Subtype</span>
+            <div class="filter-mode-toggle" data-group="subtypes">
+              <button class="mode-btn active" data-mode="all">All</button>
+              <button class="mode-btn" data-mode="any">Any</button>
+            </div>
+            <span id="subtype-total" class="filter-num"></span>
+          </h4>
           <div id="subtype-list" class="filter-list"></div>
         </section>
         <section class="filter-group">
-          <h4 class="filter-label">Tags <span id="tag-total" class="filter-num"></span></h4>
+          <h4 class="filter-label">
+            <span>Tags</span>
+            <div class="filter-mode-toggle" data-group="tags">
+              <button class="mode-btn active" data-mode="all">All</button>
+              <button class="mode-btn" data-mode="any">Any</button>
+            </div>
+            <span id="tag-total" class="filter-num"></span>
+          </h4>
           <div id="tag-list" class="filter-list"></div>
         </section>
         <button id="clear-btn" class="btn btn-ghost btn-sm">Clear all filters</button>

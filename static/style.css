@@ -376,10 +376,32 @@ textarea { resize: vertical; min-height: 80px; }
   color: var(--text-dim);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
+}
+.filter-mode-toggle {
+  display: flex;
+  gap: 2px;
+}
+.mode-btn {
+  font-size: 9px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mode-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.mode-btn:hover {
+  background: var(--hover);
 }
 .sort-row {
   display: flex;
