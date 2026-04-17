@@ -34,30 +34,13 @@ A private, web-based cocktail recipe database. Manage your collection of cocktai
 
 The app will automatically create the database and seed users on first run.
 
-### Freezing a Working Version
-If you find a commit that worked last night, tag or release it in Git so Portainer can deploy that exact version.
-
-#### Create a Git tag locally
-```bash
-git log --oneline --since='1 day ago'
-# find the commit hash for last night's working version
-
-git tag stable-nightly <commit-hash>
-git push origin stable-nightly
-```
-
-#### Create a GitHub release
-- Open your repo on GitHub
-- Go to **Releases** → **Draft a new release**
-- Choose the commit hash or the tag you created
-- Name it something like `stable-nightly` or `v1.0.0`
-- Publish the release
+### Version
+We use releases with standard versioning (vX.Y.Z). There will also be a tag=stable.
 
 #### Use the tag in Portainer
-- In the stack settings, set the Git reference to the tag name instead of `main`
+- In the stack settings, set the Git reference to the tag name instead of `main` (e.g., `refs/heads/v0.1.0` or `refs/heads/stable`)
 - Redeploy the stack
 
-This lets you lock the app to a known-good version even if `main` changes.
 
 ### Local Development
 ```bash
