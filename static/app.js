@@ -414,33 +414,33 @@ function renderActivePills() {
   const c = document.getElementById('active-pills');
   const pills = [];
   for (const name of S.activeCategories) {
-    pills.push(`<span class="apill" data-type="category" data-name="${esc(name)}">
+    pills.push(`<span class="apill" data-type="category" data-name="${name}">
       🧭 ${esc(name)}
-      <button data-type="category" data-name="${esc(name)}" title="Remove filter">×</button>
+      <button data-type="category" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   for (const name of S.activeSubtypes) {
-    pills.push(`<span class="apill" data-type="subtype" data-name="${esc(name)}">
+    pills.push(`<span class="apill" data-type="subtype" data-name="${name}">
       ✦ ${esc(name)}
-      <button data-type="subtype" data-name="${esc(name)}" title="Remove filter">×</button>
+      <button data-type="subtype" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   for (const name of S.activeTags) {
-    pills.push(`<span class="apill" data-type="tag" data-name="${esc(name)}">
+    pills.push(`<span class="apill" data-type="tag" data-name="${name}">
       #${esc(name)}
-      <button data-type="tag" data-name="${esc(name)}" title="Remove filter">×</button>
+      <button data-type="tag" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   for (const name of S.activeIngs) {
-    pills.push(`<span class="apill" data-type="ing" data-name="${esc(name)}">
+    pills.push(`<span class="apill" data-type="ing" data-name="${name}">
       ${esc(name)}
-      <button data-type="ing" data-name="${esc(name)}" title="Remove filter">×</button>
+      <button data-type="ing" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   for (const name of S.activeTools) {
-    pills.push(`<span class="apill" data-type="tool" data-name="${esc(name)}">
+    pills.push(`<span class="apill" data-type="tool" data-name="${name}">
       ⚙ ${esc(name)}
-      <button data-type="tool" data-name="${esc(name)}" title="Remove filter">×</button>
+      <button data-type="tool" data-name="${name}" title="Remove filter">×</button>
     </span>`);
   }
   c.innerHTML = pills.join('');

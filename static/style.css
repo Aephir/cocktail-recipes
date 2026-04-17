@@ -48,6 +48,8 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+input { font-size: 16px; }
+
 /* Subtle noise overlay */
 body::before {
   content: '';
