@@ -161,22 +161,19 @@ function setViewport(content) {
   if (viewport) viewport.setAttribute('content', content);
 }
 
-function resetMobileZoomAfterLogin() {
+function applyViewportForScreen(isLoginScreen) {
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   if (!isIOS) {
     setViewport('width=device-width, initial-scale=1.0');
     return;
   }
 
-  // iOS can keep focused-input zoom after auth; force a quick lock/unlock cycle.
-  setViewport('width=device-width, initial-scale=1.0, maximum-scale=1.0');
-  window.scrollTo(0, 0);
-  requestAnimationFrame(() => {
+  // All iOS browsers use WebKit; lock scale to avoid sticky focus zoom state.
+  const base = 'width=device-width, initial-scale=1.0, maximum-scale=1.0';
+  setViewport(base);
+  if (!isLoginScreen) {
     window.scrollTo(0, 0);
-    setTimeout(() => {
-      setViewport('width=device-width, initial-scale=1.0');
-    }, 160);
-  });
+  }
 }
 
 function setUser(user) {
@@ -195,11 +192,13 @@ function showLogin() {
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('l-pass').value = '';
+  applyViewportForScreen(true);
 }
 
 function showApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+  applyViewportForScreen(false);
 }
 
 /* ── Data ───────────────────────────────────────────────────────────────── */
@@ -1164,6 +1163,7 @@ function showConfirm(msg, onOk) {
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ─ Login ─ */
+  const loginForm = document.getElementById('login-form');
   const loginBtn = document.getElementById('l-submit');
   const loginErr = document.getElementById('login-error');
 
@@ -1183,7 +1183,14 @@ document.addEventListener('DOMContentLoaded', () => {
       loginBtn.disabled = false;
     }
   }
-  loginBtn.addEventListener('click', doLogin);
+  loginForm?.addEventListener('submit', e => {
+    e.preventDefault();
+    doLogin();
+  });
+  loginBtn.addEventListener('click', e => {
+    e.preventDefault();
+    doLogin();
+  });
   document.getElementById('l-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   document.getElementById('l-user').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('l-pass').focus(); });
 
