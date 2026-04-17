@@ -161,6 +161,24 @@ function setViewport(content) {
   if (viewport) viewport.setAttribute('content', content);
 }
 
+function resetMobileZoomAfterLogin() {
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!isIOS) {
+    setViewport('width=device-width, initial-scale=1.0');
+    return;
+  }
+
+  // iOS can keep focused-input zoom after auth; force a quick lock/unlock cycle.
+  setViewport('width=device-width, initial-scale=1.0, maximum-scale=1.0');
+  window.scrollTo(0, 0);
+  requestAnimationFrame(() => {
+    window.scrollTo(0, 0);
+    setTimeout(() => {
+      setViewport('width=device-width, initial-scale=1.0');
+    }, 160);
+  });
+}
+
 function setUser(user) {
   S.user = user;
   document.getElementById('user-pill').textContent = user.username;
@@ -170,8 +188,7 @@ function setUser(user) {
     document.activeElement.blur();
   }
   showApp();
-  // Normalize scale when entering the app after iOS login-field zoom.
-  setViewport('width=device-width, initial-scale=1.0, maximum-scale=1.0');
+  resetMobileZoomAfterLogin();
   loadData();
 }
 
