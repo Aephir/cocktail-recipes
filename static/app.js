@@ -1200,6 +1200,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ─ New recipe ─ */
   document.getElementById('new-btn').addEventListener('click', openAddForm);
+  document.getElementById('new-btn-mobile').addEventListener('click', () => {
+    closeMobileMenu();
+    openAddForm();
+  });
+
+  /* ─ Mobile menu ─ */
+  function closeMobileMenu() {
+    const dropdown = document.getElementById('hdr-menu-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+  }
+  
+  const menuToggle = document.getElementById('hdr-menu-toggle');
+  if (menuToggle) {
+    menuToggle.addEventListener('click', () => {
+      const dropdown = document.getElementById('hdr-menu-dropdown');
+      dropdown.classList.toggle('hidden');
+    });
+  }
+
+  document.getElementById('fields-btn-mobile').addEventListener('click', () => {
+    closeMobileMenu();
+    openFieldsModal();
+  });
+  document.getElementById('bulk-import-btn-mobile').addEventListener('click', () => {
+    closeMobileMenu();
+    openBulkImportModal();
+  });
+  document.getElementById('logout-btn-mobile').addEventListener('click', async () => {
+    closeMobileMenu();
+    await api('POST', '/api/auth/logout').catch(() => {});
+    S.user = null;
+    S.recipes = [];
+    S.activeIngs.clear();
+    S.activeTools.clear();
+    S.activeCategories.clear();
+    S.activeSubtypes.clear();
+    S.activeTags.clear();
+    showLogin();
+  });
+
+  // Close mobile menu when clicking outside
+  document.addEventListener('click', e => {
+    const menuWrapper = document.querySelector('.hdr-menu-wrapper');
+    if (menuWrapper && !menuWrapper.contains(e.target)) {
+      closeMobileMenu();
+    }
+  });
 
   /* ─ Detail panel ─ */
   document.getElementById('detail-close').addEventListener('click', closeDetail);
