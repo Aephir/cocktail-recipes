@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import HTTPException, BadRequest
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
@@ -238,7 +239,15 @@ def api_recipe(rid):
 @login_required
 @admin_required
 def api_create_recipe():
-    data = request.get_json() or {}
+    try:
+        data = request.get_json()
+    except BadRequest as exc:
+        logger.warning('Invalid JSON payload for recipe creation: %s', exc)
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+    if not isinstance(data, dict):
+        logger.warning('Unexpected payload type for recipe creation: %s', type(data).__name__)
+        return jsonify({'error': 'Invalid JSON object'}), 400
+
     if not data.get('name', '').strip():
         return jsonify({'error': 'Name is required'}), 400
 
@@ -263,7 +272,14 @@ def api_create_recipe():
 @admin_required
 def api_update_recipe(rid):
     recipe = Recipe.query.get_or_404(rid)
-    data = request.get_json() or {}
+    try:
+        data = request.get_json()
+    except BadRequest as exc:
+        logger.warning('Invalid JSON payload for recipe update %s: %s', rid, exc)
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+    if not isinstance(data, dict):
+        logger.warning('Unexpected payload type for recipe update %s: %s', rid, type(data).__name__)
+        return jsonify({'error': 'Invalid JSON object'}), 400
 
     recipe.name = data.get('name', recipe.name).strip()
     if 'score' in data:
@@ -528,6 +544,26 @@ def api_upload():
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
+
+with app.app_context():
+    db.create_all()
+    recipe_columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipes')]
+    if 'score' not in recipe_columns:
+        db.session.execute(text('ALTER TABLE recipes ADD COLUMN score INTEGER DEFAULT 5'))
+        db.session.execute(text('UPDATE recipes SET score=5 WHERE score IS NULL'))
+        db.session.commit()
+    columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipe_ingredients')]
+    if 'subrecipe_id' not in columns:
+        db.session.execute(text('ALTER TABLE recipe_ingredients ADD COLUMN subrecipe_id INTEGER'))
+        db.session.commit()
+
+@app.errorhandler(Exception)
+def handle_api_exceptions(error):
+    if request.path.startswith('/api/'):
+        if isinstance(error, HTTPException):
+            return jsonify({'error': error.description}), error.code
+        return jsonify({'error': str(error)}), 500
+    raise error
 
 with app.app_context():
     db.create_all()

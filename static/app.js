@@ -31,7 +31,21 @@ async function api(method, path, body = null) {
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
-  const data = await res.json();
+  let data = null;
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      data = await res.json();
+    } catch (err) {
+      throw new Error(`Invalid JSON response (${res.status})`);
+    }
+  } else {
+    const text = await res.text();
+    if (text) {
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    throw new Error(`HTTP ${res.status}`);
+  }
   if (res.status === 401) {
     showLogin();
     // Distinguish between login failure (AUTH_FAILED) and session expiry
