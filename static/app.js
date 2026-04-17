@@ -348,6 +348,13 @@ function renderDetail(recipe) {
     ? recipe.tools.map(t => `<span class="tool-chip">${esc(t.tool_name)}</span>`).join('')
     : '<span style="color:var(--text-muted)">—</span>';
 
+  const garnishHtml = recipe.garnishes?.length
+    ? `<div class="dsec">
+        <div class="dsec-title">Garnish</div>
+        <ul class="garnish-list">${recipe.garnishes.map(g => `<li>${esc(g.garnish_text || g.ingredient_name || '')}</li>`).join('')}</ul>
+      </div>`
+    : '';
+
   const vol = totalMl(recipe, S.scale);
 
   document.getElementById('detail-body').innerHTML = `
@@ -381,6 +388,8 @@ function renderDetail(recipe) {
           .map(line => `<li>${esc(line)}</li>`)
           .join('')}</ol></div>
       </div>` : ''}
+
+      ${garnishHtml}
 
       ${recipe.notes ? `
       <div class="dsec">
@@ -489,6 +498,7 @@ async function openEditForm() {
   }
 
   recipe.ingredients.forEach(i => addIngRow(i.amount ?? '', i.unit, i.ingredient_name, i.subrecipe_name || '', i.subrecipe_id ?? '', i.ingredient_id ?? ''));
+  recipe.garnishes?.forEach(g => addGarnishRow(g.garnish_text || g.ingredient_name || '', g.ingredient_id ?? ''));
   recipe.tools.forEach(t => addToolRow(t.tool_name, t.tool_id ?? ''));
   document.getElementById('f-score').value = recipe.score != null ? String(recipe.score) : '5';
 
@@ -535,6 +545,7 @@ function resetForm() {
   document.getElementById('f-proc').value = '';
   document.getElementById('f-notes').value = '';
   document.getElementById('f-ings').innerHTML = '';
+  document.getElementById('f-garns').innerHTML = '';
   document.getElementById('f-tools').innerHTML = '';
   document.getElementById('f-image').value = '';
   document.getElementById('img-preview').src = '';
@@ -608,6 +619,23 @@ function addToolRow(name = '', toolId = '') {
   document.getElementById('f-tools').appendChild(row);
 }
 
+function addGarnishRow(text = '', ingredientId = '') {
+  const row = document.createElement('div');
+  row.className = 'garn-row';
+  row.innerHTML = `
+    <input type="text" class="f-garn-text" value="${esc(text)}" placeholder="Garnish text or ingredient" list="ing-opts">
+    <input type="hidden" class="f-garn-ingredient-id" value="${esc(String(ingredientId))}">
+    <button class="rm-btn" type="button" title="Remove">×</button>`;
+  row.querySelector('.rm-btn').addEventListener('click', () => row.remove());
+  const textInput = row.querySelector('.f-garn-text');
+  const ingredientIdInput = row.querySelector('.f-garn-ingredient-id');
+  textInput.addEventListener('input', () => {
+    const match = S.ingredients.find(i => i.name.toLowerCase() === textInput.value.trim().toLowerCase());
+    ingredientIdInput.value = match ? String(match.id) : '';
+  });
+  document.getElementById('f-garns').appendChild(row);
+}
+
 async function saveRecipe() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { alert('Please enter a recipe name.'); return; }
@@ -641,6 +669,16 @@ async function saveRecipe() {
     });
   });
 
+  const garnishes = [];
+  document.querySelectorAll('.garn-row').forEach(row => {
+    const text = row.querySelector('.f-garn-text').value.trim();
+    const ingredientId = row.querySelector('.f-garn-ingredient-id').value.trim();
+    if (text) garnishes.push({
+      garnish_text: text,
+      ingredient_id: ingredientId || null,
+    });
+  });
+
   const custom_fields = {};
   S.customFields.forEach(f => {
     const el = document.getElementById(`cf-${f.id}`);
@@ -654,6 +692,7 @@ async function saveRecipe() {
     notes: document.getElementById('f-notes').value.trim(),
     ingredients,
     tools,
+    garnishes,
     custom_fields,
     image_filename: S.pendingImage?.filename ?? null,
   };
@@ -792,9 +831,19 @@ async function submitBulkImport() {
     return;
   }
 
+  function normalizeJsonText(text) {
+    return text
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201c\u201d\u201e\u201f]/g, '"')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/\u00a0/g, ' ')
+      .replace(/,\s*(?=[}\]])/g, '');
+  }
+
   let data;
+  const normalizedText = normalizeJsonText(jsonText);
   try {
-    data = JSON.parse(jsonText);
+    data = JSON.parse(normalizedText);
   } catch (e) {
     alert('Invalid JSON: ' + e.message);
     return;
@@ -992,6 +1041,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('form-save').addEventListener('click', saveRecipe);
   document.getElementById('add-ing').addEventListener('click', () => addIngRow());
+  document.getElementById('add-garnish').addEventListener('click', () => addGarnishRow());
   document.getElementById('add-tool').addEventListener('click', () => addToolRow());
 
   /* ─ Image upload ─ */

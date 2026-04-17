@@ -6,6 +6,7 @@ A private, web-based cocktail recipe database. Manage your collection of cocktai
 
 - **Recipe Management**: Add, edit, and delete cocktail recipes
 - **Ingredients & Tools**: Track ingredients with amounts/units and required tools
+- **Garnish Support**: Add garnish text or ingredient-based garnish items separately from recipe ingredients
 - **Recipe Linking**: Recipes can reference other recipes as ingredients (e.g., for syrups or infusions)
 - **Ratings**: Rate recipes 1-10 and sort by rating
 - **Custom Fields**: Add flexible fields like source URLs or notes
@@ -72,6 +73,7 @@ Parse the following cocktail recipe text into a JSON array of recipes. Each reci
   "name": "string (recipe name)",
   "score": number (1-10, default 5 if not specified),
   "ingredients": array of { "amount": number or null, "unit": "string", "ingredient_name": "string" },
+  "garnishes": array of { "garnish_text": "string", "ingredient_id": number or null },
   "tools": array of "string" (tool names),
   "procedure": "string (multi-line procedure, e.g., '1. Step one\n2. Step two')",
   "notes": "string or null (optional notes)"
@@ -115,6 +117,9 @@ Muddle mint with sugar and lime, add rum and ice, top with soda, stir.
       {"amount": 0.5, "unit": "oz", "ingredient_name": "dry vermouth"},
       {"amount": null, "unit": null, "ingredient_name": "olive or lemon twist"}
     ],
+    "garnishes": [
+      { "garnish_text": "Olive or lemon twist", "ingredient_id": null }
+    ],
     "tools": ["cocktail shaker", "strainer"],
     "procedure": "Shake gin and vermouth with ice, strain into glass, garnish.",
     "notes": null
@@ -128,6 +133,9 @@ Muddle mint with sugar and lime, add rum and ice, top with soda, stir.
       {"amount": 2, "unit": "tsp", "ingredient_name": "sugar"},
       {"amount": null, "unit": null, "ingredient_name": "soda water"},
       {"amount": null, "unit": null, "ingredient_name": "mint leaves"}
+    ],
+    "garnishes": [
+      { "garnish_text": "Mint sprig", "ingredient_id": null }
     ],
     "tools": [],
     "procedure": "Muddle mint with sugar and lime, add rum and ice, top with soda, stir.",

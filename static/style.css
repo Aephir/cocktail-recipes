@@ -785,6 +785,20 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .ing-row input { margin: 0; }
 
+.garns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.garn-row {
+  display: grid;
+  grid-template-columns: 1fr 28px;
+  gap: 8px;
+  align-items: center;
+}
+.garn-row input { margin: 0; }
+
 .tool-row {
   display: grid;
   grid-template-columns: 1fr 28px;
@@ -927,6 +941,15 @@ textarea { resize: vertical; min-height: 80px; }
   font-size: 13px;
 }
 .detail-custom-field a:hover { text-decoration: underline; }
+
+.garnish-list {
+  list-style: disc inside;
+  margin: 0;
+  padding: 0;
+}
+.garnish-list li {
+  margin-bottom: 4px;
+}
 .detail-custom-field .dcf-val {
   font-size: 13px;
   color: var(--text);

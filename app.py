@@ -1,9 +1,11 @@
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
+import json
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.exceptions import HTTPException, BadRequest
+import re
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
@@ -111,6 +113,17 @@ class RecipeTool(db.Model):
     tool = db.relationship('Tool')
 
 
+class RecipeGarnish(db.Model):
+    __tablename__ = 'recipe_garnishes'
+    id = db.Column(db.Integer, primary_key=True)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=False)
+    ingredient_id = db.Column(db.Integer, db.ForeignKey('ingredients.id'), nullable=True)
+    garnish_text = db.Column(db.Text, default='')
+    order = db.Column(db.Integer, default=0)
+    recipe = db.relationship('Recipe', back_populates='recipe_garnishes')
+    ingredient = db.relationship('Ingredient')
+
+
 class Recipe(db.Model):
     __tablename__ = 'recipes'
     id = db.Column(db.Integer, primary_key=True)
@@ -129,6 +142,7 @@ class Recipe(db.Model):
         order_by='RecipeIngredient.order'
     )
     recipe_tools = db.relationship('RecipeTool', back_populates='recipe', cascade='all, delete-orphan')
+    recipe_garnishes = db.relationship('RecipeGarnish', back_populates='recipe', cascade='all, delete-orphan', order_by='RecipeGarnish.order')
     custom_values = db.relationship('CustomFieldValue', back_populates='recipe', cascade='all, delete-orphan')
 
     def to_dict(self):
@@ -158,6 +172,15 @@ class Recipe(db.Model):
                     'tool_name': rt.tool.name,
                 }
                 for rt in self.recipe_tools
+            ],
+            'garnishes': [
+                {
+                    'ingredient_id': rg.ingredient_id,
+                    'ingredient_name': rg.ingredient.name if rg.ingredient else None,
+                    'garnish_text': rg.garnish_text or '',
+                    'order': rg.order,
+                }
+                for rg in self.recipe_garnishes
             ],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'custom_fields': {str(cv.field_def_id): cv.value for cv in self.custom_values},
@@ -262,6 +285,7 @@ def api_create_recipe():
     db.session.flush()
     _sync_ingredients(recipe, data.get('ingredients', []))
     _sync_tools(recipe, data.get('tools', []))
+    _sync_garnishes(recipe, data.get('garnishes', []))
     _sync_custom_fields(recipe, data.get('custom_fields', {}))
     db.session.commit()
     return jsonify(recipe.to_dict()), 201
@@ -296,20 +320,48 @@ def api_update_recipe(rid):
 
     RecipeIngredient.query.filter_by(recipe_id=rid).delete()
     RecipeTool.query.filter_by(recipe_id=rid).delete()
+    RecipeGarnish.query.filter_by(recipe_id=rid).delete()
     CustomFieldValue.query.filter_by(recipe_id=rid).delete()
     db.session.flush()
     _sync_ingredients(recipe, data.get('ingredients', []))
     _sync_tools(recipe, data.get('tools', []))
+    _sync_garnishes(recipe, data.get('garnishes', []))
     _sync_custom_fields(recipe, data.get('custom_fields', {}))
     db.session.commit()
     return jsonify(recipe.to_dict())
+
+
+def _normalize_json_text(text):
+    if not isinstance(text, str):
+        return text
+    text = text.replace('\u2018', "'").replace('\u2019', "'")
+    text = text.replace('\u201c', '"').replace('\u201d', '"').replace('\u201e', '"').replace('\u201f', '"')
+    text = text.replace('\u2013', '-').replace('\u2014', '-')
+    text = text.replace('\u00a0', ' ')
+    text = re.sub(r',\s*(?=[}\]])', '', text)
+    return text
 
 
 @app.route('/api/bulk-import', methods=['POST'])
 @login_required
 @admin_required
 def api_bulk_import():
-    data = request.get_json()
+    try:
+        data = request.get_json()
+    except BadRequest:
+        raw = request.get_data(as_text=True)
+        try:
+            cleaned = _normalize_json_text(raw)
+            data = json.loads(cleaned)
+        except Exception:
+            return jsonify({'error': 'Invalid JSON payload'}), 400
+    if data is None:
+        raw = request.get_data(as_text=True)
+        try:
+            cleaned = _normalize_json_text(raw)
+            data = json.loads(cleaned)
+        except Exception:
+            return jsonify({'error': 'Invalid JSON payload'}), 400
     if not isinstance(data, list):
         return jsonify({'error': 'Expected a JSON array of recipes'}), 400
 
@@ -335,6 +387,7 @@ def api_bulk_import():
             db.session.flush()
             _sync_ingredients(recipe, recipe_data.get('ingredients', []))
             _sync_tools(recipe, recipe_data.get('tools', []))
+            _sync_garnishes(recipe, recipe_data.get('garnishes', []))
             imported += 1
         except Exception as e:
             errors.append(f'Recipe {i+1}: {str(e)}')
@@ -353,64 +406,6 @@ def api_delete_recipe(rid):
     db.session.delete(recipe)
     db.session.commit()
     return jsonify({'ok': True})
-
-    for i, ing in enumerate(ingredients_data):
-        ingredient_id = ing.get('ingredient_id')
-        name = (ing.get('ingredient_name') or '').strip()
-        subrecipe_id = ing.get('subrecipe_id')
-
-        if ingredient_id is not None and ingredient_id != '':
-            try:
-                ingredient_id = int(ingredient_id)
-            except (TypeError, ValueError):
-                ingredient_id = None
-
-        if subrecipe_id is not None and subrecipe_id != '':
-            try:
-                subrecipe_id = int(subrecipe_id)
-            except (TypeError, ValueError):
-                subrecipe_id = None
-        else:
-            subrecipe_id = None
-
-        subrecipe = None
-        if subrecipe_id:
-            subrecipe = Recipe.query.get(subrecipe_id)
-            if not subrecipe or subrecipe.id == recipe.id:
-                subrecipe = None
-                subrecipe_id = None
-
-        if not name and subrecipe:
-            name = subrecipe.name
-        if not name:
-            continue
-
-        ingredient = None
-        if ingredient_id:
-            ingredient = Ingredient.query.get(ingredient_id)
-        if not ingredient:
-            ingredient = Ingredient.query.filter_by(name=name).first()
-        if not ingredient:
-            ingredient = Ingredient(name=name)
-            db.session.add(ingredient)
-            db.session.flush()
-
-        amount = ing.get('amount')
-        if amount is not None:
-            try:
-                amount = float(amount)
-            except (TypeError, ValueError):
-                amount = None
-
-        ri = RecipeIngredient(
-            recipe_id=recipe.id,
-            ingredient_id=ingredient.id,
-            subrecipe_id=subrecipe_id,
-            amount=amount,
-            unit=(ing.get('unit') or 'ml').strip(),
-            order=i,
-        )
-        db.session.add(ri)
 
 
 def _sync_tools(recipe, tools_data):
@@ -441,6 +436,43 @@ def _sync_tools(recipe, tools_data):
         if not tool:
             continue
         db.session.add(RecipeTool(recipe_id=recipe.id, tool_id=tool.id))
+
+
+def _sync_garnishes(recipe, garnishes_data):
+    for i, garnish_item in enumerate(garnishes_data):
+        ingredient_id = None
+        garnish_text = ''
+        if isinstance(garnish_item, dict):
+            ingredient_id = garnish_item.get('ingredient_id')
+            garnish_text = (garnish_item.get('garnish_text') or '').strip()
+        else:
+            garnish_text = (garnish_item or '').strip()
+
+        if not garnish_text and ingredient_id is None:
+            continue
+
+        if ingredient_id is not None and ingredient_id != '':
+            try:
+                ingredient_id = int(ingredient_id)
+            except (TypeError, ValueError):
+                ingredient_id = None
+
+        ingredient = None
+        if ingredient_id:
+            ingredient = Ingredient.query.get(ingredient_id)
+        if not ingredient and garnish_text:
+            ingredient = Ingredient.query.filter_by(name=garnish_text).first()
+        if ingredient:
+            ingredient_id = ingredient.id
+        else:
+            ingredient_id = None
+
+        db.session.add(RecipeGarnish(
+            recipe_id=recipe.id,
+            ingredient_id=ingredient_id,
+            garnish_text=garnish_text,
+            order=i,
+        ))
 
 
 def _sync_ingredients(recipe, ingredients_data):
