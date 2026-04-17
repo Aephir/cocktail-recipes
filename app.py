@@ -123,6 +123,7 @@ class Recipe(db.Model):
 
     recipe_ingredients = db.relationship(
         'RecipeIngredient', back_populates='recipe',
+        foreign_keys='RecipeIngredient.recipe_id',
         cascade='all, delete-orphan',
         order_by='RecipeIngredient.order'
     )
