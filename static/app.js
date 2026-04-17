@@ -1060,122 +1060,6 @@ function renderFieldsList() {
     </div>`).join('');
 }
 
-/* ── Data Editor Modal ─────────────────────────────────────────────────── */
-async function openDataEditorModal() {
-  const overlay = document.getElementById('data-editor-overlay');
-  const tableSelect = document.getElementById('de-table');
-  const rowSelect = document.getElementById('de-row');
-  const fieldsHost = document.getElementById('de-fields');
-  const status = document.getElementById('de-status');
-
-  overlay.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
-  status.classList.add('hidden');
-  fieldsHost.innerHTML = '';
-  tableSelect.innerHTML = '<option value="">Loading tables…</option>';
-  rowSelect.innerHTML = '<option value="">Select row</option>';
-
-  try {
-    const tables = await api('GET', '/api/admin/data/tables');
-    tableSelect.innerHTML = tables
-      .map(t => `<option value="${esc(t.key)}">${esc(t.label)} (${t.count})</option>`)
-      .join('');
-    if (tables.length) {
-      tableSelect.value = tables[0].key;
-      await loadDataEditorRows();
-    }
-  } catch (e) {
-    showDataEditorStatus(e.message, true);
-  }
-}
-
-function closeDataEditorModal() {
-  document.getElementById('data-editor-overlay').classList.add('hidden');
-  document.body.style.overflow = '';
-}
-
-function showDataEditorStatus(message, isError = false) {
-  const status = document.getElementById('de-status');
-  status.classList.remove('hidden');
-  status.className = isError ? 'alert-error' : 'alert-success';
-  status.textContent = message;
-}
-
-async function loadDataEditorRows() {
-  const table = document.getElementById('de-table').value;
-  const rowSelect = document.getElementById('de-row');
-  const fieldsHost = document.getElementById('de-fields');
-  if (!table) {
-    rowSelect.innerHTML = '<option value="">Select row</option>';
-    fieldsHost.innerHTML = '';
-    return;
-  }
-
-  rowSelect.innerHTML = '<option value="">Loading rows…</option>';
-  fieldsHost.innerHTML = '';
-  const rows = await api('GET', `/api/admin/data/${encodeURIComponent(table)}/rows?limit=5000`);
-  rowSelect.innerHTML = '<option value="">Select row</option>' + rows
-    .map(r => `<option value="${r.id}">#${r.id} · ${esc(r.label)}</option>`)
-    .join('');
-}
-
-async function loadDataEditorRecord() {
-  const table = document.getElementById('de-table').value;
-  const rowId = document.getElementById('de-row').value;
-  const fieldsHost = document.getElementById('de-fields');
-  if (!table || !rowId) {
-    fieldsHost.innerHTML = '';
-    return;
-  }
-
-  const data = await api('GET', `/api/admin/data/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`);
-  const fieldsHtml = data.fields.map(f => {
-    const value = data.record[f.name];
-    const valueStr = value == null ? '' : String(value);
-    const keyLabel = `${esc(f.name)}${f.editable ? '' : ' (locked)'}`;
-    if (!f.editable) {
-      return `<div class="field"><label>${keyLabel}</label><input type="text" value="${esc(valueStr)}" disabled></div>`;
-    }
-    if (f.kind === 'textarea') {
-      return `<div class="field"><label>${keyLabel}</label><textarea data-de-field="${esc(f.name)}" rows="3" placeholder="${f.nullable ? 'Empty = null' : ''}">${esc(valueStr)}</textarea></div>`;
-    }
-    const inputType = f.kind === 'number' ? 'number' : 'text';
-    return `<div class="field"><label>${keyLabel}</label><input type="${inputType}" data-de-field="${esc(f.name)}" value="${esc(valueStr)}" placeholder="${f.nullable ? 'Empty = null' : ''}"></div>`;
-  }).join('');
-  fieldsHost.innerHTML = fieldsHtml || '<p class="fields-hint">No fields available.</p>';
-}
-
-async function saveDataEditorRecord() {
-  const table = document.getElementById('de-table').value;
-  const rowId = document.getElementById('de-row').value;
-  const fieldsHost = document.getElementById('de-fields');
-  const saveBtn = document.getElementById('de-save');
-  if (!table || !rowId) {
-    showDataEditorStatus('Choose a table and row first.', true);
-    return;
-  }
-
-  const fields = {};
-  fieldsHost.querySelectorAll('[data-de-field]').forEach(el => {
-    fields[el.dataset.deField] = el.value;
-  });
-
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving…';
-  try {
-    await api('PUT', `/api/admin/data/${encodeURIComponent(table)}/rows/${encodeURIComponent(rowId)}`, { fields });
-    await loadDataEditorRecord();
-    showDataEditorStatus('Saved successfully.');
-    await loadDataEditorRows();
-    document.getElementById('de-row').value = String(rowId);
-  } catch (e) {
-    showDataEditorStatus(e.message, true);
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save Changes';
-  }
-}
-
 /* ── Bulk Import Modal ─────────────────────────────────────────────────── */
 function openBulkImportModal() {
   document.getElementById('bulk-import-json').value = '';
@@ -1443,10 +1327,6 @@ document.addEventListener('DOMContentLoaded', () => {
     closeMobileMenu();
     openFieldsModal();
   });
-  document.getElementById('data-editor-btn-mobile').addEventListener('click', () => {
-    closeMobileMenu();
-    openDataEditorModal();
-  });
   document.getElementById('bulk-import-btn-mobile').addEventListener('click', () => {
     closeMobileMenu();
     openBulkImportModal();
@@ -1514,8 +1394,6 @@ document.addEventListener('DOMContentLoaded', () => {
       closeForm();
     } else if (!document.getElementById('detail-overlay').classList.contains('hidden')) {
       closeDetail();
-    } else if (!document.getElementById('data-editor-overlay').classList.contains('hidden')) {
-      closeDataEditorModal();
     }
   });
 
@@ -1528,31 +1406,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('add-field-btn').addEventListener('click', async () => {
-
-  /* ─ Data Editor modal ─ */
-  document.getElementById('data-editor-btn').addEventListener('click', openDataEditorModal);
-  document.getElementById('data-editor-btn').addEventListener('pointerup', openDataEditorModal);
-  document.getElementById('data-editor-close').addEventListener('click', closeDataEditorModal);
-  document.getElementById('de-cancel').addEventListener('click', closeDataEditorModal);
-  document.getElementById('de-reload').addEventListener('click', loadDataEditorRows);
-  document.getElementById('de-table').addEventListener('change', async () => {
-    try {
-      await loadDataEditorRows();
-    } catch (e) {
-      showDataEditorStatus(e.message, true);
-    }
-  });
-  document.getElementById('de-row').addEventListener('change', async () => {
-    try {
-      await loadDataEditorRecord();
-    } catch (e) {
-      showDataEditorStatus(e.message, true);
-    }
-  });
-  document.getElementById('de-save').addEventListener('click', saveDataEditorRecord);
-  document.getElementById('data-editor-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('data-editor-overlay')) closeDataEditorModal();
-  });
     const nameEl = document.getElementById('new-field-name');
     const typeEl = document.getElementById('new-field-type');
     const name = nameEl.value.trim();
