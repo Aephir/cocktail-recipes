@@ -321,6 +321,52 @@ def _record_to_dict(record, model):
     return data
 
 
+def _column_input_kind(column):
+    try:
+        py = column.type.python_type
+    except Exception:
+        py = str
+    if py is bool:
+        return 'boolean'
+    if py in (int, float):
+        return 'number'
+    if py is datetime:
+        return 'datetime'
+    if getattr(column.type, 'length', None) is None:
+        return 'textarea' if 'TEXT' in str(column.type).upper() else 'text'
+    return 'text'
+
+
+def _coerce_column_value(column, value):
+    if value == '' and column.nullable:
+        return None
+    if value is None:
+        return None
+
+    try:
+        py = column.type.python_type
+    except Exception:
+        py = str
+
+    if py is bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in ('1', 'true', 'yes', 'on')
+        return bool(value)
+    if py is int:
+        return int(value)
+    if py is float:
+        return float(value)
+    if py is datetime:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str) and value.strip():
+            return datetime.fromisoformat(value.strip())
+        return None
+    return value
+
+
 def _data_model_or_404(table_name):
     cfg = ADMIN_DATA_MODELS.get(table_name)
     if not cfg:
@@ -395,7 +441,7 @@ def api_admin_data_rows(table_name):
 
     model = cfg['model']
     display_col = cfg['display']
-    limit = min(max(int(request.args.get('limit', 300)), 1), 1000)
+    limit = min(max(int(request.args.get('limit', 1000)), 1), 5000)
     rows = model.query.order_by(model.id.desc()).limit(limit).all()
 
     payload = []
@@ -425,6 +471,15 @@ def api_admin_data_row(table_name, row_id):
         'table': table_name,
         'record': _record_to_dict(row, model),
         'editable_fields': editable,
+        'fields': [
+            {
+                'name': c.name,
+                'editable': c.name != 'id',
+                'nullable': c.nullable,
+                'kind': _column_input_kind(c),
+            }
+            for c in columns
+        ],
     })
 
 
@@ -457,9 +512,11 @@ def api_admin_update_row(table_name, row_id):
             return jsonify({'error': f'Unknown field: {key}'}), 400
 
         column = columns[key]
-        if value == '' and column.nullable:
-            value = None
-        setattr(row, key, value)
+        try:
+            coerced = _coerce_column_value(column, value)
+        except (TypeError, ValueError) as exc:
+            return jsonify({'error': f'Invalid value for {key}: {exc}'}), 400
+        setattr(row, key, coerced)
 
     try:
         db.session.commit()

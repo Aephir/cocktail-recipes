@@ -1054,7 +1054,7 @@ textarea { resize: vertical; min-height: 80px; }
   .hdr-center { display: none; }
 
   /* Hide desktop action buttons on mobile, show mobile menu */
-  #fields-btn, #bulk-import-btn, #new-btn, #logout-btn {
+  #fields-btn, #data-editor-btn, #bulk-import-btn, #new-btn, #logout-btn {
     display: none !important;
   }
   .hdr-menu-wrapper {
