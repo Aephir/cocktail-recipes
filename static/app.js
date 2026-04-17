@@ -156,17 +156,22 @@ async function init() {
   }
 }
 
+function setViewport(content) {
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) viewport.setAttribute('content', content);
+}
+
 function setUser(user) {
   S.user = user;
   document.getElementById('user-pill').textContent = user.username;
   const isAdmin = user.role === 'admin';
   document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('hidden', !isAdmin));
-  showApp();
-  // Reset viewport to allow normal scaling after login
-  const viewport = document.querySelector('meta[name="viewport"]');
-  if (viewport) {
-    viewport.setAttribute('content', 'width=device-width, initial-scale=1.0');
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
   }
+  showApp();
+  // Normalize scale when entering the app after iOS login-field zoom.
+  setViewport('width=device-width, initial-scale=1.0, maximum-scale=1.0');
   loadData();
 }
 
@@ -174,6 +179,8 @@ function showLogin() {
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('l-pass').value = '';
+  // Keep login zoom behavior natural on iOS input focus.
+  setViewport('width=device-width, initial-scale=1.0');
 }
 
 function showApp() {
@@ -303,6 +310,27 @@ function toggleSubtype(name) {
 function toggleTag(name) {
   S.activeTags.has(name) ? S.activeTags.delete(name) : S.activeTags.add(name);
   refreshChipStates();
+  applyFilters();
+}
+
+function clearAllFilters() {
+  S.activeIngs.clear();
+  S.activeTools.clear();
+  S.activeCategories.clear();
+  S.activeSubtypes.clear();
+  S.activeTags.clear();
+  S.filterModeIngs = 'all';
+  S.filterModeTools = 'all';
+  S.filterModeCategories = 'all';
+  S.filterModeSubtypes = 'all';
+  S.filterModeTags = 'all';
+  S.search = '';
+
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) searchInput.value = '';
+
+  refreshChipStates();
+  updateFilterModeButtons();
   applyFilters();
 }
 
@@ -1134,8 +1162,6 @@ document.addEventListener('DOMContentLoaded', () => {
         password: document.getElementById('l-pass').value,
       });
       setUser(user);
-      // Reset viewport to allow normal zooming after login
-      document.querySelector('meta[name="viewport"]').setAttribute('content', 'width=device-width, initial-scale=1.0');
     } catch (e) {
       loginErr.textContent = e.message;
       loginErr.classList.remove('hidden');
