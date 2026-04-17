@@ -48,8 +48,6 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-input { font-size: 16px; }
-
 /* Subtle noise overlay */
 body::before {
   content: '';
@@ -216,6 +214,10 @@ textarea { resize: vertical; min-height: 80px; }
   letter-spacing: .12em;
   text-transform: uppercase;
   margin-bottom: 32px;
+}
+
+#login-screen input {
+  font-size: 16px;
 }
 
 .alert-error {

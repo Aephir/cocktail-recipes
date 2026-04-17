@@ -188,7 +188,6 @@ function setUser(user) {
     document.activeElement.blur();
   }
   showApp();
-  resetMobileZoomAfterLogin();
   loadData();
 }
 
@@ -196,8 +195,6 @@ function showLogin() {
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('l-pass').value = '';
-  // Keep login zoom behavior natural on iOS input focus.
-  setViewport('width=device-width, initial-scale=1.0');
 }
 
 function showApp() {
