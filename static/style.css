@@ -874,7 +874,7 @@ textarea { resize: vertical; min-height: 80px; }
 /* Ingredient rows */
 .ing-header-row {
   display: grid;
-  grid-template-columns: 80px 72px 1fr 28px;
+  grid-template-columns: 26px 72px 64px 1fr 1fr 28px;
   gap: 8px;
   font-size: 10px;
   letter-spacing: .08em;
@@ -887,11 +887,64 @@ textarea { resize: vertical; min-height: 80px; }
 
 .ing-row {
   display: grid;
-  grid-template-columns: 80px 72px 1fr 28px;
+  grid-template-columns: 26px 72px 64px 1fr 1fr 28px;
   gap: 8px;
   align-items: center;
 }
 .ing-row input { margin: 0; }
+
+.drag-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+}
+
+.drag-handle {
+  flex: 1;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: grab;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 2px;
+  align-self: stretch;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.row-up-btn, .row-down-btn {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 2px;
+  flex: 0 0 auto;
+  transition: color var(--transition);
+}
+
+.row-up-btn:hover, .row-down-btn:hover {
+  color: var(--gold);
+}
+
+.ing-row.dragging {
+  opacity: 0.6;
+}
+
+.ing-row.drag-over-top {
+  box-shadow: inset 0 2px 0 var(--gold);
+}
+
+.ing-row.drag-over-bottom {
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
 
 .garns-list {
   display: flex;
@@ -901,7 +954,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .garn-row {
   display: grid;
-  grid-template-columns: 1fr 28px;
+  grid-template-columns: 24px 1fr 28px;
   gap: 8px;
   align-items: center;
 }
@@ -1133,13 +1186,13 @@ textarea { resize: vertical; min-height: 80px; }
 
   .form-modal { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   .ing-header-row,
-  .ing-row { grid-template-columns: 68px 60px 1fr 28px; }
+  .ing-row { grid-template-columns: 24px 64px 56px 1fr 1fr 28px; }
 }
 
 @media (max-width: 420px) {
   .login-card { padding: 36px 24px 32px; margin: 16px; }
   .ing-header-row,
-  .ing-row { grid-template-columns: 60px 54px 1fr 28px; gap: 5px; }
+  .ing-row { grid-template-columns: 22px 56px 48px 1fr 1fr 28px; gap: 5px; }
 
   #main { padding: 4px; }
   .grid { gap: 4px; }

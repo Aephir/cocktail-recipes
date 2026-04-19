@@ -866,7 +866,13 @@ async function populateAutocomplete() {
 function addIngRow(amount = '', unit = 'ml', name = '', subrecipeName = '', subrecipeId = '', ingredientId = '') {
   const row = document.createElement('div');
   row.className = 'ing-row';
+  row.draggable = true;
   row.innerHTML = `
+    <div class="drag-group">
+      <button class="drag-handle" type="button" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</button>
+      <button class="row-up-btn" type="button" title="Move up" aria-label="Move up">↑</button>
+      <button class="row-down-btn" type="button" title="Move down" aria-label="Move down">↓</button>
+    </div>
     <input type="number" class="f-ing-amt" value="${esc(String(amount))}" placeholder="Amt" step="any" min="0">
     <input type="text"   class="f-ing-unit" value="${esc(unit)}" placeholder="Unit" list="unit-opts">
     <input type="text"   class="f-ing-name" value="${esc(name)}" placeholder="Name" list="ing-opts">
@@ -875,6 +881,20 @@ function addIngRow(amount = '', unit = 'ml', name = '', subrecipeName = '', subr
     <input type="hidden" class="f-ing-subrecipe-id" value="${esc(String(subrecipeId))}">
     <button class="rm-btn" type="button" title="Remove">×</button>`;
   row.querySelector('.rm-btn').addEventListener('click', () => row.remove());
+  row.querySelector('.row-up-btn').addEventListener('click', e => {
+    e.preventDefault();
+    const prev = row.previousElementSibling;
+    if (prev && prev.classList.contains('ing-row')) {
+      row.parentNode.insertBefore(row, prev);
+    }
+  });
+  row.querySelector('.row-down-btn').addEventListener('click', e => {
+    e.preventDefault();
+    const next = row.nextElementSibling;
+    if (next && next.classList.contains('ing-row')) {
+      row.parentNode.insertBefore(next, row);
+    }
+  });
   const recipeInput = row.querySelector('.f-ing-recipe');
   const subrecipeIdInput = row.querySelector('.f-ing-subrecipe-id');
   const nameInput = row.querySelector('.f-ing-name');
@@ -887,7 +907,58 @@ function addIngRow(amount = '', unit = 'ml', name = '', subrecipeName = '', subr
     const match = S.ingredients.find(i => i.name.toLowerCase() === nameInput.value.trim().toLowerCase());
     ingredientIdInput.value = match ? String(match.id) : '';
   });
+
+  row.addEventListener('dragstart', e => {
+    if (!e.target.closest('.drag-handle')) {
+      e.preventDefault();
+      return;
+    }
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', row.dataset.dragId || 'ingredient-row');
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    document.querySelectorAll('.ing-row.drag-over-top, .ing-row.drag-over-bottom')
+      .forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+  });
+
   document.getElementById('f-ings').appendChild(row);
+}
+
+function setupIngredientReorder() {
+  const list = document.getElementById('f-ings');
+  if (!list || list.dataset.reorderBound === '1') return;
+  list.dataset.reorderBound = '1';
+
+  list.addEventListener('dragover', e => {
+    const dragging = list.querySelector('.ing-row.dragging');
+    if (!dragging) return;
+    e.preventDefault();
+
+    const target = e.target.closest('.ing-row');
+    document.querySelectorAll('.ing-row.drag-over-top, .ing-row.drag-over-bottom')
+      .forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+
+    if (!target || target === dragging) return;
+
+    const rect = target.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    target.classList.add(before ? 'drag-over-top' : 'drag-over-bottom');
+    if (before) {
+      list.insertBefore(dragging, target);
+    } else {
+      list.insertBefore(dragging, target.nextSibling);
+    }
+  });
+
+  list.addEventListener('drop', e => {
+    if (list.querySelector('.ing-row.dragging')) {
+      e.preventDefault();
+    }
+    document.querySelectorAll('.ing-row.drag-over-top, .ing-row.drag-over-bottom')
+      .forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+  });
 }
 
 function addToolRow(name = '', toolId = '') {
@@ -911,10 +982,28 @@ function addGarnishRow(text = '', ingredientId = '') {
   const row = document.createElement('div');
   row.className = 'garn-row';
   row.innerHTML = `
+    <div class="drag-group">
+      <button class="row-up-btn" type="button" title="Move up" aria-label="Move up">↑</button>
+      <button class="row-down-btn" type="button" title="Move down" aria-label="Move down">↓</button>
+    </div>
     <input type="text" class="f-garn-text" value="${esc(text)}" placeholder="Garnish text or ingredient" list="ing-opts">
     <input type="hidden" class="f-garn-ingredient-id" value="${esc(String(ingredientId))}">
     <button class="rm-btn" type="button" title="Remove">×</button>`;
   row.querySelector('.rm-btn').addEventListener('click', () => row.remove());
+  row.querySelector('.row-up-btn').addEventListener('click', e => {
+    e.preventDefault();
+    const prev = row.previousElementSibling;
+    if (prev && prev.classList.contains('garn-row')) {
+      row.parentNode.insertBefore(row, prev);
+    }
+  });
+  row.querySelector('.row-down-btn').addEventListener('click', e => {
+    e.preventDefault();
+    const next = row.nextElementSibling;
+    if (next && next.classList.contains('garn-row')) {
+      row.parentNode.insertBefore(next, row);
+    }
+  });
   const textInput = row.querySelector('.f-garn-text');
   const ingredientIdInput = row.querySelector('.f-garn-ingredient-id');
   textInput.addEventListener('input', () => {
@@ -975,7 +1064,7 @@ async function saveRecipe() {
 
   const category = document.getElementById('f-category').value;
   let subtype = document.getElementById('f-subtype').value.trim() || null;
-  if (category !== 'Cocktail' && category !== 'Ingredient') subtype = null;
+  if (category !== 'Cocktail' && category !== 'Other' && category !== 'Ingredient') subtype = null;
   const payload = {
     name,
     score: parseInt(document.getElementById('f-score').value, 10) || null,
@@ -1427,6 +1516,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('add-ing').addEventListener('click', () => addIngRow());
   document.getElementById('add-garnish').addEventListener('click', () => addGarnishRow());
   document.getElementById('add-tool').addEventListener('click', () => addToolRow());
+  setupIngredientReorder();
 
   /* ─ Image upload ─ */
   setupImageUpload();
