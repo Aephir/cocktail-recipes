@@ -61,6 +61,17 @@ function isBuiltInIconUrl(url) {
   return typeof url === 'string' && url.startsWith('/static/glass-icons/');
 }
 
+function renderRecipeImage(url, label, variant = 'card') {
+  if (!url) return '';
+  if (isBuiltInIconUrl(url)) {
+    const variantClass = variant === 'detail' ? 'detail-image' : 'card-image';
+    return `<div class="${variantClass} icon-placeholder" style="--icon-url: url('${esc(url)}');" aria-label="${esc(label)}" role="img"></div>`;
+  }
+  const variantClass = variant === 'detail' ? 'detail-image' : 'card-image';
+  const loading = variant === 'detail' ? '' : ' loading="lazy"';
+  return `<img class="${variantClass}" src="${esc(url)}" alt="${esc(label)}"${loading}>`;
+}
+
 function updateSubtypeState() {
   const category = document.getElementById('f-category')?.value;
   const subtype = document.getElementById('f-subtype');
@@ -545,9 +556,8 @@ function renderCards(list) {
   cnt.textContent = list.length === 1 ? '1 recipe' : `${list.length} recipes`;
 
   grid.innerHTML = list.map(r => {
-    const iconClass = isBuiltInIconUrl(r.image_url) ? ' icon-tinted' : '';
     const thumbHtml = r.image_url
-      ? `<img class="card-image${iconClass}" src="${esc(r.image_url)}" alt="${esc(displayLabel(r.name))}" loading="lazy">`
+      ? renderRecipeImage(r.image_url, displayLabel(r.name), 'card')
       : `<div class="card-thumb-placeholder">◈</div>`;
 
     const tags = r.ingredients.slice(0, 3)
@@ -593,9 +603,8 @@ function closeDetail() {
 }
 
 function renderDetail(recipe) {
-  const detailIconClass = isBuiltInIconUrl(recipe.image_url) ? ' icon-tinted' : '';
   const imgHtml = recipe.image_url
-    ? `<img class="detail-image${detailIconClass}" src="${esc(recipe.image_url)}" alt="${esc(displayLabel(recipe.name))}">`
+    ? renderRecipeImage(recipe.image_url, displayLabel(recipe.name), 'detail')
     : '';
 
   const ingRows = recipe.ingredients.map((i, idx) => {
