@@ -232,7 +232,7 @@ class Recipe(db.Model):
     def to_dict(self):
         image_url = f'/uploads/{self.image_filename}' if self.image_filename else None
         if not image_url:
-            icon_file = choose_glass_icon(self.recipe_tools)
+            icon_file = 'bottle.svg' if self.category == 'Ingredient' else choose_glass_icon(self.recipe_tools)
             image_url = f'/static/glass-icons/{icon_file}' if icon_file else None
 
         return {
