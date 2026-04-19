@@ -29,6 +29,7 @@ const S = {
   sidebarCollapsed: false,
   sidebarMobileOpen: false,
   overviewMode: 'drinks',
+  detailHistory: [],
 };
 
 const CATEGORY_OPTIONS = [
@@ -492,8 +493,16 @@ function updateSidebarCounts(filtered) {
   const subtypeCounts = new Map();
   const tagCounts = new Map();
   for (const r of filtered) {
-    r.ingredients.forEach(i => ingCounts.set(i.ingredient_name, (ingCounts.get(i.ingredient_name) || 0) + 1));
-    r.tools.forEach(t => toolCounts.set(t.tool_name, (toolCounts.get(t.tool_name) || 0) + 1));
+    r.ingredients.forEach(i => {
+      const ingName = (i.ingredient_name || i.subrecipe_name || '').trim();
+      if (!ingName) return;
+      ingCounts.set(ingName, (ingCounts.get(ingName) || 0) + 1);
+    });
+    r.tools.forEach(t => {
+      const toolName = (t.tool_name || '').trim();
+      if (!toolName) return;
+      toolCounts.set(toolName, (toolCounts.get(toolName) || 0) + 1);
+    });
     categoryCounts.set(r.category || 'Other', (categoryCounts.get(r.category || 'Other') || 0) + 1);
     if (r.subtype) subtypeCounts.set(r.subtype, (subtypeCounts.get(r.subtype) || 0) + 1);
     (r.tags || []).forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1));
@@ -598,12 +607,26 @@ function renderCards(list) {
 }
 
 /* ── Detail Panel ───────────────────────────────────────────────────────── */
-function openRecipe(id) {
+function updateDetailBackButton() {
+  const backBtn = document.getElementById('detail-back');
+  if (!backBtn) return;
+  backBtn.classList.toggle('hidden', S.detailHistory.length === 0);
+}
+
+function openRecipe(id, options = {}) {
+  const { pushHistory = false, resetHistory = false } = options;
   const recipe = S.recipes.find(r => r.id === id);
   if (!recipe) return;
+  if (resetHistory) {
+    S.detailHistory = [];
+  }
+  if (pushHistory && S.currentId && S.currentId !== id) {
+    S.detailHistory.push(S.currentId);
+  }
   S.currentId = id;
   S.scale = 1;
   renderDetail(recipe);
+  updateDetailBackButton();
   document.getElementById('detail-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 }
@@ -611,6 +634,18 @@ function openRecipe(id) {
 function closeDetail() {
   document.getElementById('detail-overlay').classList.add('hidden');
   document.body.style.overflow = '';
+  S.currentId = null;
+  S.detailHistory = [];
+  updateDetailBackButton();
+}
+
+function openPreviousRecipe() {
+  const previousId = S.detailHistory.pop();
+  if (!previousId) {
+    updateDetailBackButton();
+    return;
+  }
+  openRecipe(previousId);
 }
 
 function renderDetail(recipe) {
@@ -701,7 +736,7 @@ function renderDetail(recipe) {
     el.addEventListener('click', e => {
       e.preventDefault();
       const rid = Number(el.dataset.rid);
-      if (rid) openRecipe(rid);
+      if (rid) openRecipe(rid, { pushHistory: true });
     });
   });
 
@@ -1102,7 +1137,7 @@ async function saveRecipe() {
     }
     closeForm();
     await loadData();
-    if (editId) openRecipe(editId);
+    if (editId) openRecipe(editId, { resetHistory: true });
   } catch (e) {
     alert(`Save failed: ${e.message}`);
   } finally {
@@ -1443,7 +1478,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ─ Recipe grid clicks ─ */
   document.getElementById('grid').addEventListener('click', e => {
     const card = e.target.closest('.recipe-card');
-    if (card) openRecipe(parseInt(card.dataset.id, 10));
+    if (card) openRecipe(parseInt(card.dataset.id, 10), { resetHistory: true });
   });
 
   /* ─ New recipe ─ */
@@ -1497,6 +1532,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ─ Detail panel ─ */
+  document.getElementById('detail-back').addEventListener('click', openPreviousRecipe);
   document.getElementById('detail-close').addEventListener('click', closeDetail);
   document.getElementById('detail-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('detail-overlay')) closeDetail();

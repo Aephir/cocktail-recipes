@@ -23,6 +23,7 @@ GLASS_ICON_LOOKUP = [
     (['champagne saucer', 'champagne glass', 'saucer', 'coupe'], 'glass-champagne-saucer-size.svg'),
     (['collins'], 'glass-collins-size.svg'),
     (['highball'], 'glass-highball-size.svg'),
+    (['tiki mug', 'tiki', 'tiki glass', 'totem mug'], 'glass-tiki-mug-size.svg'),
     (['nick nora', 'nick and nora', 'nick & nora', 'nick nora glass'], 'glass-nick-and-nora-size.svg'),
     (['old fashioned', 'old-fashioned', 'whisky tumbler', 'whiskey tumbler', 'tumbler'], 'glass-old-fashioned-size.svg'),
 ]

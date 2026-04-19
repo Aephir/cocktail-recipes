@@ -700,6 +700,11 @@ textarea { resize: vertical; min-height: 80px; }
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
+.panel-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .panel-actions { display: flex; gap: 8px; }
 
 .detail-body { overflow-y: auto; flex: 1; }
@@ -727,6 +732,19 @@ textarea { resize: vertical; min-height: 80px; }
   font-weight: 600;
   letter-spacing: .03em;
   margin-bottom: 18px;
+}
+
+.recipe-link {
+  color: var(--gold-hi);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(224,196,138,.35);
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.recipe-link:hover,
+.recipe-link:focus-visible {
+  color: var(--gold);
+  border-bottom-color: rgba(200,169,110,.75);
 }
 
 /* Servings control */
