@@ -28,14 +28,16 @@ const S = {
   pendingImage: null,
   sidebarCollapsed: false,
   sidebarMobileOpen: false,
+  showIngredientRecipes: false,
 };
 
 const CATEGORY_OPTIONS = [
   'Cocktail', 'Highball', 'Collins', 'Fizz', 'Julep', 'Cobbler',
   'Flip', 'Nog', 'Punch', 'Toddy', 'Buck', 'Rickey', 'Smash',
-  'Swizzle', 'Other'
+  'Swizzle', 'Other', 'Ingredient',
 ];
 const SUBTYPE_OPTIONS = ['Sour', 'Aromatic', 'Old-Fashioned', 'Improved', 'Daisy'];
+const INGREDIENT_SUBTYPE_OPTIONS = ['Base', 'Modifier', 'Special Flavoring'];
 
 function normalizeTag(tag) {
   return String(tag || '').trim().toLowerCase().replace(/\s+/g, '_');
@@ -58,25 +60,30 @@ function formatTags(tags) {
 function updateSubtypeState() {
   const category = document.getElementById('f-category')?.value;
   const subtype = document.getElementById('f-subtype');
+  const scoreField = document.getElementById('f-score')?.closest('.field');
   if (!subtype) return;
   if (category === 'Cocktail') {
+    subtype.innerHTML = [''].concat(SUBTYPE_OPTIONS).map(sub => `<option value="${esc(sub)}">${esc(sub)}</option>`).join('');
     subtype.disabled = false;
+    if (scoreField) scoreField.style.display = '';
+  } else if (category === 'Ingredient') {
+    subtype.innerHTML = [''].concat(INGREDIENT_SUBTYPE_OPTIONS).map(sub => `<option value="${esc(sub)}">${esc(sub)}</option>`).join('');
+    subtype.disabled = false;
+    if (scoreField) scoreField.style.display = 'none';
   } else {
+    subtype.innerHTML = '<option value=""></option>';
     subtype.disabled = true;
     subtype.value = '';
+    if (scoreField) scoreField.style.display = '';
   }
 }
 
 function populateClassificationSelectors() {
   const categorySelect = document.getElementById('f-category');
-  const subtypeSelect = document.getElementById('f-subtype');
   if (categorySelect) {
     categorySelect.innerHTML = CATEGORY_OPTIONS.map(cat => `<option value="${esc(cat)}">${esc(cat)}</option>`).join('');
   }
-  if (subtypeSelect) {
-    subtypeSelect.innerHTML = [''].concat(SUBTYPE_OPTIONS).map(sub => `<option value="${esc(sub)}">${esc(sub)}</option>`).join('');
-    subtypeSelect.disabled = true;
-  }
+  updateSubtypeState();
   categorySelect?.addEventListener('change', updateSubtypeState);
 }
 
@@ -225,6 +232,10 @@ function applyFilters() {
   const q = S.search.toLowerCase().trim();
   let list = S.recipes;
 
+  if (!S.showIngredientRecipes) {
+    list = list.filter(r => r.category !== 'Ingredient');
+  }
+
   if (q) {
     list = list.filter(r => {
       const text = [
@@ -332,6 +343,17 @@ function toggleTag(name) {
   applyFilters();
 }
 
+function toggleIngredientRecipes() {
+  S.showIngredientRecipes = !S.showIngredientRecipes;
+  const btn = document.getElementById('toggle-ing-recipes');
+  if (btn) {
+    btn.textContent = S.showIngredientRecipes ? 'Hide ingredient recipes' : 'Show ingredient recipes';
+    btn.classList.toggle('active', S.showIngredientRecipes);
+  }
+  buildSidebar();
+  applyFilters();
+}
+
 function clearAllFilters() {
   S.activeIngs.clear();
   S.activeTools.clear();
@@ -373,7 +395,10 @@ function buildSidebar() {
   const subtypeCounts = new Map();
   const tagCounts = new Map();
 
-  for (const r of S.recipes) {
+  const recipesForSidebar = S.showIngredientRecipes
+    ? S.recipes
+    : S.recipes.filter(r => r.category !== 'Ingredient');
+  for (const r of recipesForSidebar) {
     r.ingredients.forEach(i => ingCounts.set(i.ingredient_name, (ingCounts.get(i.ingredient_name) || 0) + 1));
     r.tools.forEach(t => toolCounts.set(t.tool_name, (toolCounts.get(t.tool_name) || 0) + 1));
     const category = r.category || 'Other';
@@ -524,7 +549,7 @@ function renderCards(list) {
     const more = r.ingredients.length > 3
       ? `<span class="ctag">+${r.ingredients.length - 3}</span>` : '';
 
-    const scoreLabel = r.score != null ? `<div class="card-score">${esc(r.score)}/10</div>` : '';
+    const scoreLabel = r.score != null && r.category !== 'Ingredient' ? `<div class="card-score">${esc(r.score)}/10</div>` : '';
     const classification = r.category ? esc(displayLabel(r.category)) + (r.subtype ? ` · ${esc(displayLabel(r.subtype))}` : '') : '';
 
     return `
@@ -597,7 +622,7 @@ function renderDetail(recipe) {
     ${imgHtml}
     <div class="detail-inner">
       <h1 class="detail-name">${esc(displayLabel(recipe.name))}</h1>
-      ${recipe.score != null ? `<div class="detail-score">Rating ${esc(recipe.score)}/10</div>` : ''}
+      ${recipe.score != null && recipe.category !== 'Ingredient' ? `<div class="detail-score">Rating ${esc(recipe.score)}/10</div>` : ''}
 
       <div class="servings-row">
         <span class="servings-lbl">Servings</span>
@@ -726,9 +751,9 @@ async function openEditForm() {
   document.getElementById('f-proc').value = recipe.procedure || '';
   document.getElementById('f-notes').value = recipe.notes || '';
   document.getElementById('f-category').value = recipe.category || 'Other';
-  document.getElementById('f-subtype').value = recipe.subtype || '';
   document.getElementById('f-tags').value = (recipe.tags || []).join(', ');
   updateSubtypeState();
+  document.getElementById('f-subtype').value = recipe.subtype || '';
 
   if (recipe.image_url) {
     document.getElementById('img-preview').src = recipe.image_url;
@@ -931,7 +956,7 @@ async function saveRecipe() {
 
   const category = document.getElementById('f-category').value;
   let subtype = document.getElementById('f-subtype').value.trim() || null;
-  if (category !== 'Cocktail') subtype = null;
+  if (category !== 'Cocktail' && category !== 'Ingredient') subtype = null;
   const payload = {
     name,
     score: parseInt(document.getElementById('f-score').value, 10) || null,
@@ -1254,6 +1279,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chip) toggleTag(chip.dataset.name);
   });
   document.getElementById('clear-btn').addEventListener('click', clearAllFilters);
+  document.getElementById('toggle-ing-recipes').addEventListener('click', toggleIngredientRecipes);
 
   /* ─ Filter mode toggles ─ */
   document.getElementById('sidebar').addEventListener('click', e => {

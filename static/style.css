@@ -429,6 +429,9 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .filter-num { font-size: 10px; color: var(--text-muted); }
 
+.toggle-ing-btn { width: 100%; justify-content: center; margin-bottom: 6px; }
+.toggle-ing-btn.active { background: var(--gold-dim); color: var(--gold); border-color: var(--gold-border); }
+
 .filter-list { display: flex; flex-direction: column; gap: 1px; }
 
 .fchip {
