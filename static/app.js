@@ -32,12 +32,14 @@ const S = {
 };
 
 const CATEGORY_OPTIONS = [
-  'Cocktail', 'Highball', 'Collins', 'Fizz', 'Julep', 'Cobbler',
-  'Flip', 'Nog', 'Punch', 'Toddy', 'Buck', 'Rickey', 'Smash',
-  'Swizzle', 'Other', 'Ingredient',
+  'Cocktail', 'Highball', 'Collins', 'Rickey', 'Buck', 'Fizz',
+  'Julep', 'Smash', 'Cobbler', 'Swizzle', 'Sling', 'Toddy',
+  'Punch', 'Cup', 'Flip', 'Nog', 'Fix', 'Crusta',
+  'Frappé', 'Shrub', 'Wassail Bowl', 'Champerelle', 'Other',
+  'Ingredient',
 ];
 const SUBTYPE_OPTIONS = ['Sour', 'Aromatic', 'Old-Fashioned', 'Improved', 'Daisy'];
-const INGREDIENT_SUBTYPE_OPTIONS = ['Base', 'Modifier', 'Special Flavoring'];
+const INGREDIENT_SUBTYPE_OPTIONS = ['Base', 'Modifier', 'Special Flavoring', 'Garnish', 'Other'];
 
 function normalizeTag(tag) {
   return String(tag || '').trim().toLowerCase().replace(/\s+/g, '_');

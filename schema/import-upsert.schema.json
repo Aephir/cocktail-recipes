@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/cocktail-recipes/schema/import-upsert.schema.json",
+  "title": "Recipe Import Upsert Policy Schema",
+  "description": "Schema for a future import/upsert tool payload. This is intentionally tool-facing and may include controls not yet implemented by the current API endpoint.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy", "items"],
+  "properties": {
+    "policy": {
+      "$ref": "#/$defs/ImportPolicy"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "recipe-api.schema.json#/$defs/RecipeCreateInput"
+      }
+    },
+    "dry_run": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, a tool should calculate actions without writing to DB."
+    },
+    "client_request_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional idempotency key for tooling pipelines."
+    }
+  },
+  "$defs": {
+    "ImportPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match", "on_match", "on_missing", "field_merge"],
+      "properties": {
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["strategy"],
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": ["id", "name", "name+category"],
+              "description": "How to find existing rows to upsert against."
+            },
+            "name_case_sensitive": {
+              "type": "boolean",
+              "default": false
+            },
+            "trim_whitespace": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        },
+        "on_match": {
+          "type": "string",
+          "enum": ["overwrite", "merge", "skip", "error"],
+          "description": "Action when an item matches an existing recipe."
+        },
+        "on_missing": {
+          "type": "string",
+          "enum": ["create", "skip", "error"],
+          "description": "Action when no existing recipe is found."
+        },
+        "field_merge": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scalar_fields",
+            "tags",
+            "ingredients",
+            "tools",
+            "garnishes",
+            "custom_fields",
+            "image"
+          ],
+          "properties": {
+            "scalar_fields": {
+              "type": "string",
+              "enum": ["replace", "fill_missing", "keep_existing"]
+            },
+            "tags": {
+              "type": "string",
+              "enum": ["replace", "union", "keep_existing"]
+            },
+            "ingredients": {
+              "type": "string",
+              "enum": ["replace", "append_dedup", "keep_existing"]
+            },
+            "tools": {
+              "type": "string",
+              "enum": ["replace", "append_dedup", "keep_existing"]
+            },
+            "garnishes": {
+              "type": "string",
+              "enum": ["replace", "append_dedup", "keep_existing"]
+            },
+            "custom_fields": {
+              "type": "string",
+              "enum": ["replace", "merge", "keep_existing"]
+            },
+            "image": {
+              "type": "string",
+              "enum": ["replace", "keep_existing", "replace_if_missing"]
+            }
+          }
+        },
+        "delete_missing": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, recipes not present in input may be deleted (dangerous; off by default)."
+        },
+        "conflict_handling": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "multiple_matches": {
+              "type": "string",
+              "enum": ["first", "error"],
+              "default": "error"
+            },
+            "invalid_item": {
+              "type": "string",
+              "enum": ["skip", "error"],
+              "default": "skip"
+            }
+          }
+        }
+      }
+    },
+    "PlannedImportAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "name", "action"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "name": { "type": "string" },
+        "action": {
+          "type": "string",
+          "enum": ["create", "update", "skip", "error"]
+        },
+        "matched_recipe_id": { "type": ["integer", "null"] },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "ImportUpsertResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created", "updated", "skipped", "errors", "actions"],
+      "properties": {
+        "created": { "type": "integer", "minimum": 0 },
+        "updated": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PlannedImportAction" }
+        }
+      }
+    }
+  }
+}

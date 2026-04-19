@@ -1,0 +1,361 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/cocktail-recipes/schema/recipe-api.schema.json",
+  "title": "Cocktail Recipes API Schemas",
+  "description": "Schema bundle for recipe create/update/read and bulk import payloads.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$defs": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "Category": {
+      "type": "string",
+      "description": "Primary drink family. Tall/historical families like Fizz, Collins, Rickey, Buck, Swizzle, and Fix are top-level categories, not subtypes.",
+      "enum": [
+        "Cocktail",
+        "Highball",
+        "Collins",
+        "Rickey",
+        "Buck",
+        "Fizz",
+        "Julep",
+        "Smash",
+        "Cobbler",
+        "Swizzle",
+        "Sling",
+        "Toddy",
+        "Punch",
+        "Cup",
+        "Flip",
+        "Nog",
+        "Fix",
+        "Crusta",
+        "Frappé",
+        "Shrub",
+        "Wassail Bowl",
+        "Champerelle",
+        "Other",
+        "Ingredient"
+      ]
+    },
+    "CocktailSubtype": {
+      "type": "string",
+      "description": "Subtypes only valid when category is Cocktail. These are used for Embury-style cocktail structure, not for tall/historical families.",
+      "enum": ["Sour", "Aromatic", "Old-Fashioned", "Improved", "Daisy"]
+    },
+    "IngredientSubtype": {
+      "type": "string",
+      "description": "Subtypes only valid when category is Ingredient.",
+      "enum": ["Base", "Modifier", "Special Flavoring", "Garnish", "Other"]
+    },
+    "TagsInput": {
+      "description": "Accepted by API: either array of tags or a comma-separated string.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "RecipeIngredientInputObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ingredient_id": { "type": ["integer", "null"] },
+        "subrecipe_id": { "type": ["integer", "null"] },
+        "ingredient_name": { "type": "string" },
+        "amount": { "type": ["number", "null"] },
+        "unit": { "type": "string" }
+      }
+    },
+    "RecipeIngredientInput": {
+      "description": "Input accepts either plain ingredient name string or structured object.",
+      "oneOf": [
+        { "type": "string" },
+        { "$ref": "#/$defs/RecipeIngredientInputObject" }
+      ]
+    },
+    "RecipeToolInputObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool_id": { "type": ["integer", "null"] },
+        "tool_name": { "type": "string" }
+      }
+    },
+    "RecipeToolInput": {
+      "oneOf": [
+        { "type": "string" },
+        { "$ref": "#/$defs/RecipeToolInputObject" }
+      ]
+    },
+    "RecipeGarnishInputObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ingredient_id": { "type": ["integer", "null"] },
+        "garnish_text": { "type": "string" }
+      }
+    },
+    "RecipeGarnishInput": {
+      "oneOf": [
+        { "type": "string" },
+        { "$ref": "#/$defs/RecipeGarnishInputObject" }
+      ]
+    },
+    "CustomFieldsMap": {
+      "type": "object",
+      "description": "Map of custom field definition id -> value.",
+      "patternProperties": {
+        "^[0-9]+$": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "RecipeCreateInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "category": { "$ref": "#/$defs/Category" },
+        "subtype": { "type": ["string", "null"] },
+        "score": { "type": ["integer", "null"], "minimum": 1, "maximum": 10 },
+        "tags": { "$ref": "#/$defs/TagsInput" },
+        "procedure": { "type": "string" },
+        "notes": { "type": "string" },
+        "image_filename": { "type": ["string", "null"] },
+        "ingredients": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeIngredientInput" }
+        },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeToolInput" }
+        },
+        "garnishes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeGarnishInput" }
+        },
+        "custom_fields": { "$ref": "#/$defs/CustomFieldsMap" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "category": { "const": "Cocktail" } },
+            "required": ["category"]
+          },
+          "then": {
+            "properties": {
+              "subtype": {
+                "oneOf": [
+                  { "$ref": "#/$defs/CocktailSubtype" },
+                  { "type": "null" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "category": { "const": "Ingredient" } },
+            "required": ["category"]
+          },
+          "then": {
+            "properties": {
+              "subtype": {
+                "oneOf": [
+                  { "$ref": "#/$defs/IngredientSubtype" },
+                  { "type": "null" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "enum": [
+                  "Highball",
+                  "Collins",
+                  "Rickey",
+                  "Buck",
+                  "Fizz",
+                  "Julep",
+                  "Smash",
+                  "Cobbler",
+                  "Swizzle",
+                  "Sling",
+                  "Toddy",
+                  "Punch",
+                  "Cup",
+                  "Flip",
+                  "Nog",
+                  "Fix",
+                  "Crusta",
+                  "Frappé",
+                  "Shrub",
+                  "Wassail Bowl",
+                  "Champerelle",
+                  "Other"
+                ]
+              }
+            },
+            "required": ["category", "subtype"]
+          },
+          "then": {
+            "properties": { "subtype": { "type": "null" } }
+          }
+        }
+      ]
+    },
+    "RecipeUpdateInput": {
+      "type": "object",
+      "description": "Same shape as create, but all fields optional.",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "category": { "$ref": "#/$defs/Category" },
+        "subtype": { "type": ["string", "null"] },
+        "score": { "type": ["integer", "null"], "minimum": 1, "maximum": 10 },
+        "tags": { "$ref": "#/$defs/TagsInput" },
+        "procedure": { "type": "string" },
+        "notes": { "type": "string" },
+        "image_filename": { "type": ["string", "null"] },
+        "ingredients": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeIngredientInput" }
+        },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeToolInput" }
+        },
+        "garnishes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeGarnishInput" }
+        },
+        "custom_fields": { "$ref": "#/$defs/CustomFieldsMap" }
+      }
+    },
+    "RecipeIngredientOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "ingredient_id", "ingredient_name", "order", "subrecipe_id", "subrecipe_name", "unit"],
+      "properties": {
+        "ingredient_id": { "type": ["integer", "null"] },
+        "ingredient_name": { "type": ["string", "null"] },
+        "amount": { "type": ["number", "null"] },
+        "unit": { "type": "string" },
+        "order": { "type": "integer" },
+        "subrecipe_id": { "type": ["integer", "null"] },
+        "subrecipe_name": { "type": ["string", "null"] }
+      }
+    },
+    "RecipeToolOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_id", "tool_name"],
+      "properties": {
+        "tool_id": { "type": "integer" },
+        "tool_name": { "type": "string" }
+      }
+    },
+    "RecipeGarnishOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ingredient_id", "ingredient_name", "garnish_text", "order"],
+      "properties": {
+        "ingredient_id": { "type": ["integer", "null"] },
+        "ingredient_name": { "type": ["string", "null"] },
+        "garnish_text": { "type": "string" },
+        "order": { "type": "integer" }
+      }
+    },
+    "RecipeRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "procedure",
+        "notes",
+        "image_filename",
+        "image_url",
+        "score",
+        "ingredients",
+        "category",
+        "subtype",
+        "tags",
+        "tools",
+        "garnishes",
+        "created_at",
+        "custom_fields"
+      ],
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" },
+        "procedure": { "type": "string" },
+        "notes": { "type": "string" },
+        "image_filename": { "type": ["string", "null"] },
+        "image_url": { "type": ["string", "null"] },
+        "score": { "type": "integer" },
+        "ingredients": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeIngredientOutput" }
+        },
+        "category": { "type": "string" },
+        "subtype": { "type": ["string", "null"] },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeToolOutput" }
+        },
+        "garnishes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RecipeGarnishOutput" }
+        },
+        "created_at": { "type": ["string", "null"] },
+        "custom_fields": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "BulkImportRequest": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/RecipeCreateInput" }
+    },
+    "BulkImportResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imported", "errors"],
+      "properties": {
+        "imported": { "type": "integer", "minimum": 0 },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "CustomFieldDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "field_type", "display_order"],
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" },
+        "field_type": { "type": "string", "enum": ["text", "url", "textarea"] },
+        "display_order": { "type": "integer" }
+      }
+    }
+  }
+}

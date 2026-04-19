@@ -11,6 +11,7 @@ A private, web-based cocktail recipe database. Manage your collection of cocktai
 - **Ratings**: Rate recipes 1-10 and sort by rating
 - **Custom Fields**: Add flexible fields like source URLs or notes
 - **Search & Filter**: Filter by ingredients/tools, search by name
+- **Classification Model**: Category + subtype model including ingredient recipes
 - **Bulk Import**: Import multiple recipes via JSON (with AI parsing support)
 - **Mobile-Friendly**: Responsive design for phones and tablets
 - **Admin-Only Editing**: Private collection with login-based access
@@ -36,7 +37,7 @@ A private, web-based cocktail recipe database. Manage your collection of cocktai
 The app will automatically create the database and seed users on first run.
 
 ### Version
-Current release: `v0.1.1`
+Current release: `v0.1.2`
 
 We use releases with standard versioning (vX.Y.Z). There will also be a tag=stable.
 
@@ -58,9 +59,110 @@ docker-compose up --build
 
 ### Adding Recipes
 - Click "+ New Recipe" (admin only)
-- Fill in name, rating (1-10), ingredients, tools, procedure, notes
+- Fill in name, category/subtype, rating (1-10 for drink recipes), ingredients, tools, procedure, notes
 - Ingredients can be regular items or linked to other recipes
 - Upload images if desired
+
+### Classification Model
+
+Categories:
+
+- `Cocktail`
+- `Highball`
+- `Collins`
+- `Rickey`
+- `Buck`
+- `Fizz`
+- `Julep`
+- `Smash`
+- `Cobbler`
+- `Swizzle`
+- `Sling`
+- `Toddy`
+- `Punch`
+- `Cup`
+- `Flip`
+- `Nog`
+- `Fix`
+- `Crusta`
+- `Frappé`
+- `Shrub`
+- `Wassail Bowl`
+- `Champerelle`
+- `Other`
+- `Ingredient`
+
+Subtype rules:
+
+- For category `Cocktail`: `Sour`, `Aromatic`, `Old-Fashioned`, `Improved`, `Daisy`
+- For category `Ingredient`: `Base`, `Modifier`, `Special Flavoring`, `Garnish`, `Other`
+- All other categories: no subtype
+
+Single-axis decision (current):
+
+- The app uses one classification axis: `category` plus an optional `subtype`.
+- `Cocktail` and `Ingredient` support subtype.
+- All other categories are top-level families and intentionally do not support subtype.
+
+### JSON Schema (For Automation / MCP / Bulk Tools)
+
+Machine-readable schema bundle:
+
+- `schema/recipe-api.schema.json`
+- `schema/import-upsert.schema.json` (future tool-facing policy envelope for overwrite/merge behavior)
+
+Main definitions inside that file:
+
+- `RecipeCreateInput`
+- `RecipeUpdateInput`
+- `RecipeRead`
+- `BulkImportRequest`
+- `BulkImportResponse`
+- `CustomFieldDef`
+
+This is the recommended source for building import/export scripts, AI transforms, and future MCP tooling.
+
+Example future import-upsert envelope:
+
+```json
+{
+  "policy": {
+    "match": { "strategy": "name+category", "name_case_sensitive": false, "trim_whitespace": true },
+    "on_match": "merge",
+    "on_missing": "create",
+    "field_merge": {
+      "scalar_fields": "replace",
+      "tags": "union",
+      "ingredients": "replace",
+      "tools": "replace",
+      "garnishes": "replace",
+      "custom_fields": "merge",
+      "image": "replace_if_missing"
+    }
+  },
+  "dry_run": true,
+  "items": [
+    {
+      "name": "Classic Daiquiri",
+      "category": "Cocktail",
+      "subtype": "Sour",
+      "score": 8,
+      "ingredients": [
+        { "amount": 2, "unit": "oz", "ingredient_name": "white rum" },
+        { "amount": 1, "unit": "oz", "ingredient_name": "lime juice" },
+        { "amount": 0.75, "unit": "oz", "ingredient_name": "simple syrup" }
+      ],
+      "tools": ["shaker"],
+      "garnishes": [],
+      "procedure": "Shake with ice and fine strain.",
+      "notes": "",
+      "custom_fields": {}
+    }
+  ]
+}
+```
+
+Note: The current app endpoint `POST /api/bulk-import` still accepts a plain JSON array of recipes. The upsert policy envelope is added now to support future importer/dev-tool/MCP implementation.
 
 ### Bulk Importing Recipes
 
@@ -70,15 +172,33 @@ If you have recipes in messy formats (e.g., copied from websites, PDFs, or handw
 Use this prompt with OpenAI GPT-4, Anthropic Claude, or similar AI tools to convert your messy recipe text into structured JSON:
 
 ```
-Parse the following cocktail recipe text into a JSON array of recipes. Each recipe should have this exact structure:
+Parse the following cocktail recipe text into a JSON array of recipes. Each recipe should follow this structure:
 {
-  "name": "string (recipe name)",
-  "score": number (1-10, default 5 if not specified),
-  "ingredients": array of { "amount": number or null, "unit": "string", "ingredient_name": "string" },
-  "garnishes": array of { "garnish_text": "string", "ingredient_id": number or null },
-  "tools": array of "string" (tool names),
-  "procedure": "string (multi-line procedure, e.g., '1. Step one\n2. Step two')",
-  "notes": "string or null (optional notes)"
+  "name": "string (required)",
+  "category": "Cocktail|Highball|Collins|Rickey|Buck|Fizz|Julep|Smash|Cobbler|Swizzle|Sling|Toddy|Punch|Cup|Flip|Nog|Fix|Crusta|Frappé|Shrub|Wassail Bowl|Champerelle|Other|Ingredient",
+  "subtype": "string or null (only valid for Cocktail or Ingredient)",
+  "score": "integer 1-10 (omit or set null to use default)",
+  "tags": ["string", "..."],
+  "ingredients": [
+    {
+      "amount": "number or null",
+      "unit": "string (e.g. oz, ml, dash)",
+      "ingredient_name": "string",
+      "ingredient_id": "number or null (optional)",
+      "subrecipe_id": "number or null (optional)"
+    }
+  ],
+  "garnishes": [
+    {
+      "garnish_text": "string",
+      "ingredient_id": "number or null"
+    }
+  ],
+  "tools": ["string or { tool_name, tool_id }"],
+  "procedure": "string",
+  "notes": "string",
+  "custom_fields": { "<field_id>": "value" },
+  "image_filename": "string or null"
 }
 
 Handle variations like:
@@ -113,7 +233,10 @@ Muddle mint with sugar and lime, add rum and ice, top with soda, stir.
 [
   {
     "name": "Classic Martini",
+    "category": "Cocktail",
+    "subtype": "Aromatic",
     "score": 5,
+    "tags": ["classic", "gin"],
     "ingredients": [
       {"amount": 2.5, "unit": "oz", "ingredient_name": "gin"},
       {"amount": 0.5, "unit": "oz", "ingredient_name": "dry vermouth"},
@@ -124,24 +247,22 @@ Muddle mint with sugar and lime, add rum and ice, top with soda, stir.
     ],
     "tools": ["cocktail shaker", "strainer"],
     "procedure": "Shake gin and vermouth with ice, strain into glass, garnish.",
-    "notes": null
+    "notes": "",
+    "custom_fields": {}
   },
   {
-    "name": "Mojito",
+    "name": "Don's Mix",
+    "category": "Ingredient",
+    "subtype": "Modifier",
     "score": 5,
     "ingredients": [
-      {"amount": 2, "unit": "oz", "ingredient_name": "white rum"},
-      {"amount": 1, "unit": "oz", "ingredient_name": "lime juice"},
-      {"amount": 2, "unit": "tsp", "ingredient_name": "sugar"},
-      {"amount": null, "unit": null, "ingredient_name": "soda water"},
-      {"amount": null, "unit": null, "ingredient_name": "mint leaves"}
+      {"amount": 2, "unit": "part", "ingredient_name": "grapefruit juice"},
+      {"amount": 1, "unit": "part", "ingredient_name": "cinnamon syrup"}
     ],
-    "garnishes": [
-      { "garnish_text": "Mint sprig", "ingredient_id": null }
-    ],
+    "garnishes": [],
     "tools": [],
-    "procedure": "Muddle mint with sugar and lime, add rum and ice, top with soda, stir.",
-    "notes": null
+    "procedure": "Stir together and refrigerate.",
+    "notes": "Used in tiki recipes"
   }
 ]
 ```
@@ -160,7 +281,7 @@ curl -X POST -H "Content-Type: application/json" \
   -d @recipes.json \
   http://your-app/api/bulk-import
 ```
-Authenticate with session cookies or API keys if configured.
+Authenticate with session cookies (same as web login).
 
 ### Managing Custom Fields
 - Click "⚙ Fields" (admin only)

@@ -11,12 +11,13 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 
 CLASSIFICATION_CATEGORIES = [
-    'Cocktail', 'Highball', 'Collins', 'Fizz', 'Julep', 'Cobbler', 'Flip',
-    'Nog', 'Punch', 'Toddy', 'Buck', 'Rickey', 'Smash', 'Swizzle', 'Other',
-    'Ingredient',
+    'Cocktail', 'Highball', 'Collins', 'Rickey', 'Buck', 'Fizz', 'Julep',
+    'Smash', 'Cobbler', 'Swizzle', 'Sling', 'Toddy', 'Punch', 'Cup', 'Flip',
+    'Nog', 'Fix', 'Crusta', 'Frappé', 'Shrub', 'Wassail Bowl',
+    'Champerelle', 'Other', 'Ingredient',
 ]
 COCKTAIL_SUBTYPES = ['Sour', 'Aromatic', 'Old-Fashioned', 'Improved', 'Daisy']
-INGREDIENT_SUBTYPES = ['Base', 'Modifier', 'Special Flavoring']
+INGREDIENT_SUBTYPES = ['Base', 'Modifier', 'Special Flavoring', 'Garnish', 'Other']
 
 GLASS_ICON_LOOKUP = [
     (['champagne saucer', 'champagne glass', 'saucer'], 'glass-champagne-saucer-size.svg'),
@@ -246,7 +247,7 @@ class Recipe(db.Model):
             'ingredients': [
                 {
                     'ingredient_id': ri.ingredient_id,
-                    'ingredient_name': ri.ingredient.name,
+                    'ingredient_name': ri.ingredient.name if ri.ingredient else None,
                     'amount': ri.amount,
                     'unit': ri.unit or 'ml',
                     'order': ri.order,
@@ -504,29 +505,46 @@ def api_bulk_import():
             category = (recipe_data.get('category') or 'Other').strip() or 'Other'
             subtype = (recipe_data.get('subtype') or '').strip() or None
             tags = parse_tags(recipe_data.get('tags', []))
-            if subtype and category != 'Cocktail':
-                subtype = None
+            if subtype and category not in ('Cocktail', 'Ingredient'):
+                errors.append(f'Recipe {i+1}: Subtype is only allowed for Cocktail or Ingredient category')
+                continue
+            if subtype and category == 'Cocktail' and subtype not in COCKTAIL_SUBTYPES:
+                errors.append(f'Recipe {i+1}: Invalid subtype for Cocktail')
+                continue
+            if subtype and category == 'Ingredient' and subtype not in INGREDIENT_SUBTYPES:
+                errors.append(f'Recipe {i+1}: Invalid subtype for Ingredient')
+                continue
+
+            raw_score = recipe_data.get('score', 5)
+            try:
+                score = int(raw_score) if str(raw_score).strip() != '' else 5
+            except (TypeError, ValueError):
+                score = 5
+            score = max(1, min(10, score))
+
             recipe = Recipe(
                 name=recipe_data['name'].strip(),
                 category=category,
                 subtype=subtype,
                 tags=format_tags(tags),
-                score=int(recipe_data.get('score', 5)) if isinstance(recipe_data.get('score'), (int, float)) and 1 <= recipe_data.get('score', 5) <= 10 else 5,
+                score=score,
                 procedure=recipe_data.get('procedure', '').strip(),
                 notes=recipe_data.get('notes', '').strip() if recipe_data.get('notes') else '',
+                image_filename=recipe_data.get('image_filename'),
             )
             db.session.add(recipe)
             db.session.flush()
             _sync_ingredients(recipe, recipe_data.get('ingredients', []))
             _sync_tools(recipe, recipe_data.get('tools', []))
             _sync_garnishes(recipe, recipe_data.get('garnishes', []))
+            _sync_custom_fields(recipe, recipe_data.get('custom_fields', {}))
+            db.session.commit()
             imported += 1
         except Exception as e:
             errors.append(f'Recipe {i+1}: {str(e)}')
             db.session.rollback()
             continue
 
-    db.session.commit()
     return jsonify({'imported': imported, 'errors': errors}), 200 if imported > 0 else 400
 
 
@@ -822,6 +840,19 @@ with app.app_context():
                 {'category': category or 'Other', 'subtype': subtype, 'id': rid}
             )
         db.session.commit()
+
+    db.session.execute(text(
+        """
+        UPDATE recipes
+        SET category = 'Cocktail',
+            subtype = CASE
+                WHEN subtype IS NULL OR TRIM(subtype) = '' THEN 'Daisy'
+                ELSE subtype
+            END
+        WHERE category = 'Daisy'
+        """
+    ))
+    db.session.commit()
 
     def _seed(username_env, password_env, default_u, default_p, role):
         uname = os.environ.get(username_env, default_u)
