@@ -37,7 +37,7 @@ A private, web-based cocktail recipe database. Manage your collection of cocktai
 The app will automatically create the database and seed users on first run.
 
 ### Version
-Current release: `v0.1.3`
+Current release: `v0.1.4`
 
 We use releases with standard versioning (vX.Y.Z). There will also be a tag=stable.
 
@@ -178,7 +178,7 @@ Parse the following cocktail recipe text into a JSON array of recipes. Each reci
   "name": "string (required)",
   "category": "Cocktail|Highball|Collins|Rickey|Buck|Fizz|Julep|Smash|Cobbler|Swizzle|Sling|Toddy|Punch|Cup|Flip|Nog|Fix|Crusta|Frappé|Shrub|Wassail Bowl|Champerelle|Other|Ingredient",
   "subtype": "string or null (only valid for Cocktail, Other, or Ingredient)",
-  "score": "integer 1-10 (omit or set null to use default)",
+  "score": "integer 1-10, or null/blank for unrated",
   "tags": ["string", "..."],
   "ingredients": [
     {

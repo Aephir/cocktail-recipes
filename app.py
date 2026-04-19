@@ -74,6 +74,34 @@ def format_tags(tags):
     return json.dumps([str(t).strip() for t in (tags or []) if str(t).strip()])
 
 
+def normalize_score(value, *, missing_default=5):
+    """Normalize score input.
+
+    - Missing score keeps legacy default (5)
+    - Null/blank score is stored as 0 (unrated sentinel)
+    - Numeric score is clamped to 1..10
+    """
+    if value is None:
+        return 0
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped == '':
+            return 0
+        value = stripped
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return missing_default
+    return max(1, min(10, parsed))
+
+
+def display_score(value):
+    """Return API-facing score, mapping unrated sentinel to null."""
+    if value is None:
+        return None
+    return value if int(value) >= 1 else None
+
+
 def map_legacy_classification(value):
     if not value:
         return None, None
@@ -244,7 +272,7 @@ class Recipe(db.Model):
             'notes': self.notes or '',
             'image_filename': self.image_filename,
             'image_url': image_url,
-            'score': self.score,
+            'score': display_score(self.score),
             'ingredients': [
                 {
                     'ingredient_id': ri.ingredient_id,
@@ -386,7 +414,7 @@ def api_create_recipe():
         category=category,
         subtype=subtype,
         tags=format_tags(tags),
-        score=int(data.get('score', 5)) if str(data.get('score', '')).strip() != '' else 5,
+        score=normalize_score(data['score']) if 'score' in data else 5,
         procedure=data.get('procedure', '').strip(),
         notes=data.get('notes', '').strip(),
         image_filename=data.get('image_filename'),
@@ -433,11 +461,7 @@ def api_update_recipe(rid):
     if 'tags' in data:
         recipe.tags = format_tags(parse_tags(data.get('tags', [])))
     if 'score' in data:
-        try:
-            recipe.score = int(data['score'])
-        except (TypeError, ValueError):
-            recipe.score = recipe.score
-        recipe.score = max(1, min(10, recipe.score))
+        recipe.score = normalize_score(data['score'], missing_default=recipe.score if recipe.score is not None else 5)
     recipe.procedure = data.get('procedure', recipe.procedure or '').strip()
     recipe.notes = data.get('notes', recipe.notes or '').strip()
     if 'image_filename' in data:
@@ -516,12 +540,7 @@ def api_bulk_import():
                 errors.append(f'Recipe {i+1}: Invalid subtype for Ingredient')
                 continue
 
-            raw_score = recipe_data.get('score', 5)
-            try:
-                score = int(raw_score) if str(raw_score).strip() != '' else 5
-            except (TypeError, ValueError):
-                score = 5
-            score = max(1, min(10, score))
+            score = normalize_score(recipe_data['score']) if 'score' in recipe_data else 5
 
             recipe = Recipe(
                 name=recipe_data['name'].strip(),

@@ -319,7 +319,7 @@
         "notes": { "type": "string" },
         "image_filename": { "type": ["string", "null"] },
         "image_url": { "type": ["string", "null"] },
-        "score": { "type": "integer" },
+        "score": { "type": ["integer", "null"] },
         "ingredients": {
           "type": "array",
           "items": { "$ref": "#/$defs/RecipeIngredientOutput" }

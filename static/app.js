@@ -828,7 +828,7 @@ async function openEditForm() {
   recipe.ingredients.forEach(i => addIngRow(i.amount ?? '', i.unit, i.ingredient_name, i.subrecipe_name || '', i.subrecipe_id ?? '', i.ingredient_id ?? ''));
   recipe.garnishes?.forEach(g => addGarnishRow(g.garnish_text || g.ingredient_name || '', g.ingredient_id ?? ''));
   recipe.tools.forEach(t => addToolRow(t.tool_name, t.tool_id ?? ''));
-  document.getElementById('f-score').value = recipe.score != null ? String(recipe.score) : '5';
+  document.getElementById('f-score').value = recipe.score != null ? String(recipe.score) : '';
 
   await populateAutocomplete();
   renderFormCustomFields(recipe);
