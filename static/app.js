@@ -418,19 +418,28 @@ function buildSidebar() {
 
   const recipesForSidebar = recipesForOverviewMode();
   for (const r of recipesForSidebar) {
-    r.ingredients.forEach(i => ingCounts.set(i.ingredient_name, (ingCounts.get(i.ingredient_name) || 0) + 1));
-    r.tools.forEach(t => toolCounts.set(t.tool_name, (toolCounts.get(t.tool_name) || 0) + 1));
+    r.ingredients.forEach(i => {
+      const ingName = (i.ingredient_name || i.subrecipe_name || '').trim();
+      if (!ingName) return;
+      ingCounts.set(ingName, (ingCounts.get(ingName) || 0) + 1);
+    });
+    r.tools.forEach(t => {
+      const toolName = (t.tool_name || '').trim();
+      if (!toolName) return;
+      toolCounts.set(toolName, (toolCounts.get(toolName) || 0) + 1);
+    });
     const category = r.category || 'Other';
     categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
     if (r.subtype) subtypeCounts.set(r.subtype, (subtypeCounts.get(r.subtype) || 0) + 1);
     (r.tags || []).forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1));
   }
 
-  const sortedIngs = [...ingCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const sortedTools = [...toolCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const sortedCategories = [...categoryCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const sortedSubtypes = [...subtypeCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const sortedTags = [...tagCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const compareEntryNames = (a, b) => String(a?.[0] || '').localeCompare(String(b?.[0] || ''));
+  const sortedIngs = [...ingCounts.entries()].sort(compareEntryNames);
+  const sortedTools = [...toolCounts.entries()].sort(compareEntryNames);
+  const sortedCategories = [...categoryCounts.entries()].sort(compareEntryNames);
+  const sortedSubtypes = [...subtypeCounts.entries()].sort(compareEntryNames);
+  const sortedTags = [...tagCounts.entries()].sort(compareEntryNames);
 
   document.getElementById('ing-total').textContent = sortedIngs.length;
   document.getElementById('tool-total').textContent = sortedTools.length;
