@@ -302,6 +302,7 @@
         "notes",
         "image_filename",
         "image_url",
+        "image_thumb_url",
         "score",
         "ingredients",
         "category",
@@ -319,6 +320,7 @@
         "notes": { "type": "string" },
         "image_filename": { "type": ["string", "null"] },
         "image_url": { "type": ["string", "null"] },
+        "image_thumb_url": { "type": ["string", "null"] },
         "score": { "type": ["integer", "null"] },
         "ingredients": {
           "type": "array",

@@ -634,6 +634,11 @@ textarea { resize: vertical; min-height: 80px; }
   white-space: nowrap;
 }
 
+.card-score.unrated {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
 .card-tags {
   display: flex;
   flex-wrap: wrap;
@@ -732,6 +737,10 @@ textarea { resize: vertical; min-height: 80px; }
   font-weight: 600;
   letter-spacing: .03em;
   margin-bottom: 18px;
+}
+
+.detail-score.unrated {
+  color: var(--text-dim);
 }
 
 .recipe-link {

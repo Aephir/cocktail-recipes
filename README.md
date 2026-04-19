@@ -37,7 +37,7 @@ A private, web-based cocktail recipe database. Manage your collection of cocktai
 The app will automatically create the database and seed users on first run.
 
 ### Version
-Current release: `v0.1.4`
+Current release: `v0.1.5`
 
 We use releases with standard versioning (vX.Y.Z). There will also be a tag=stable.
 

@@ -9,6 +9,7 @@ import re
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 CLASSIFICATION_CATEGORIES = [
     'Cocktail', 'Highball', 'Collins', 'Rickey', 'Buck', 'Fizz', 'Julep',
@@ -74,10 +75,10 @@ def format_tags(tags):
     return json.dumps([str(t).strip() for t in (tags or []) if str(t).strip()])
 
 
-def normalize_score(value, *, missing_default=5):
+def normalize_score(value, *, missing_default=0):
     """Normalize score input.
 
-    - Missing score keeps legacy default (5)
+    - Missing score defaults to unrated (0)
     - Null/blank score is stored as 0 (unrated sentinel)
     - Numeric score is clamped to 1..10
     """
@@ -150,6 +151,37 @@ login_manager = LoginManager(app)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
+MAX_UPLOAD_IMAGE_DIM = 1600
+MAX_UPLOAD_THUMB_DIM = 480
+UPLOAD_IMAGE_QUALITY = 82
+UPLOAD_THUMB_QUALITY = 76
+
+
+def _thumbnail_filename(filename):
+    stem, _ = os.path.splitext(filename)
+    return f'{stem}__thumb.webp'
+
+
+def _optimize_and_save_upload(file_storage, output_path, thumb_output_path=None):
+    """Normalize uploaded image for web delivery.
+
+    - Applies EXIF orientation (mobile camera friendliness)
+    - Resizes to a max edge length
+    - Saves full-size and optional thumbnail as WebP for good quality/size balance
+    """
+    file_storage.stream.seek(0)
+    with Image.open(file_storage.stream) as img:
+        img = ImageOps.exif_transpose(img)
+        if img.mode not in ('RGB', 'RGBA'):
+            img = img.convert('RGBA' if 'A' in img.getbands() else 'RGB')
+        full = img.copy()
+        full.thumbnail((MAX_UPLOAD_IMAGE_DIM, MAX_UPLOAD_IMAGE_DIM), Image.Resampling.LANCZOS)
+        full.save(output_path, format='WEBP', quality=UPLOAD_IMAGE_QUALITY, method=6)
+
+        if thumb_output_path:
+            thumb = img.copy()
+            thumb.thumbnail((MAX_UPLOAD_THUMB_DIM, MAX_UPLOAD_THUMB_DIM), Image.Resampling.LANCZOS)
+            thumb.save(thumb_output_path, format='WEBP', quality=UPLOAD_THUMB_QUALITY, method=6)
 
 # ── Models ───────────────────────────────────────────────────────────────────
 
@@ -242,7 +274,7 @@ class Recipe(db.Model):
     category = db.Column(db.String(100), nullable=False, default='Other')
     subtype = db.Column(db.String(100), nullable=True)
     tags = db.Column(db.Text, default='[]')
-    score = db.Column(db.Integer, default=5, nullable=False)
+    score = db.Column(db.Integer, default=0, nullable=False)
     procedure = db.Column(db.Text, default='')
     notes = db.Column(db.Text, default='')
     image_filename = db.Column(db.String(256))
@@ -261,9 +293,18 @@ class Recipe(db.Model):
 
     def to_dict(self):
         image_url = f'/uploads/{self.image_filename}' if self.image_filename else None
+        image_thumb_url = None
+        if self.image_filename:
+            if self.image_filename.lower().endswith('.gif'):
+                image_thumb_url = image_url
+            else:
+                thumb_name = _thumbnail_filename(self.image_filename)
+                thumb_path = os.path.join(app.config['UPLOAD_FOLDER'], thumb_name)
+                image_thumb_url = f'/uploads/{thumb_name}' if os.path.exists(thumb_path) else image_url
         if not image_url:
             icon_file = 'bottle.svg' if self.category == 'Ingredient' else choose_glass_icon(self.recipe_tools)
             image_url = f'/static/glass-icons/{icon_file}' if icon_file else None
+            image_thumb_url = image_url
 
         return {
             'id': self.id,
@@ -272,6 +313,7 @@ class Recipe(db.Model):
             'notes': self.notes or '',
             'image_filename': self.image_filename,
             'image_url': image_url,
+            'image_thumb_url': image_thumb_url,
             'score': display_score(self.score),
             'ingredients': [
                 {
@@ -414,7 +456,7 @@ def api_create_recipe():
         category=category,
         subtype=subtype,
         tags=format_tags(tags),
-        score=normalize_score(data['score']) if 'score' in data else 5,
+        score=normalize_score(data['score']) if 'score' in data else 0,
         procedure=data.get('procedure', '').strip(),
         notes=data.get('notes', '').strip(),
         image_filename=data.get('image_filename'),
@@ -461,7 +503,7 @@ def api_update_recipe(rid):
     if 'tags' in data:
         recipe.tags = format_tags(parse_tags(data.get('tags', [])))
     if 'score' in data:
-        recipe.score = normalize_score(data['score'], missing_default=recipe.score if recipe.score is not None else 5)
+        recipe.score = normalize_score(data['score'], missing_default=recipe.score if recipe.score is not None else 0)
     recipe.procedure = data.get('procedure', recipe.procedure or '').strip()
     recipe.notes = data.get('notes', recipe.notes or '').strip()
     if 'image_filename' in data:
@@ -540,7 +582,7 @@ def api_bulk_import():
                 errors.append(f'Recipe {i+1}: Invalid subtype for Ingredient')
                 continue
 
-            score = normalize_score(recipe_data['score']) if 'score' in recipe_data else 5
+            score = normalize_score(recipe_data['score']) if 'score' in recipe_data else 0
 
             recipe = Recipe(
                 name=recipe_data['name'].strip(),
@@ -812,10 +854,25 @@ def api_upload():
     ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
     if ext not in ALLOWED_EXTENSIONS:
         return jsonify({'error': f'File type .{ext} not allowed'}), 400
-    ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-    filename = secure_filename(f'{ts}_{f.filename}')
-    f.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-    return jsonify({'filename': filename, 'url': f'/uploads/{filename}'})
+    ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+    base_name = secure_filename(os.path.splitext(f.filename)[0]) or 'upload'
+
+    # Keep GIF uploads as-is to preserve animation.
+    if ext == 'gif':
+        filename = secure_filename(f'{ts}_{base_name}.gif')
+        f.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        return jsonify({'filename': filename, 'url': f'/uploads/{filename}'})
+
+    filename = secure_filename(f'{ts}_{base_name}.webp')
+    thumb_filename = _thumbnail_filename(filename)
+    output_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    thumb_output_path = os.path.join(app.config['UPLOAD_FOLDER'], thumb_filename)
+    try:
+        _optimize_and_save_upload(f, output_path, thumb_output_path)
+    except (UnidentifiedImageError, OSError):
+        return jsonify({'error': 'Invalid or unsupported image file'}), 400
+
+    return jsonify({'filename': filename, 'url': f'/uploads/{filename}', 'thumb_url': f'/uploads/{thumb_filename}'})
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -832,8 +889,13 @@ with app.app_context():
     db.create_all()
     recipe_columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipes')]
     if 'score' not in recipe_columns:
-        db.session.execute(text('ALTER TABLE recipes ADD COLUMN score INTEGER DEFAULT 5'))
-        db.session.execute(text('UPDATE recipes SET score=5 WHERE score IS NULL'))
+        db.session.execute(text('ALTER TABLE recipes ADD COLUMN score INTEGER DEFAULT 0'))
+        db.session.execute(text('UPDATE recipes SET score=0 WHERE score IS NULL'))
+        db.session.commit()
+    else:
+        # Legacy ingredient recipes were auto-created with a default score of 5.
+        # Normalize those to unrated so Ingredient records don't imply a rating.
+        db.session.execute(text("UPDATE recipes SET score=0 WHERE category='Ingredient' AND score=5"))
         db.session.commit()
     if 'category' not in recipe_columns:
         db.session.execute(text("ALTER TABLE recipes ADD COLUMN category VARCHAR(100) DEFAULT 'Other'"))

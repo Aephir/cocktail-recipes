@@ -576,8 +576,9 @@ function renderCards(list) {
   cnt.textContent = list.length === 1 ? '1 recipe' : `${list.length} recipes`;
 
   grid.innerHTML = list.map(r => {
-    const thumbHtml = r.image_url
-      ? renderRecipeImage(r.image_url, displayLabel(r.name), 'card')
+    const cardImageUrl = r.image_thumb_url || r.image_url;
+    const thumbHtml = cardImageUrl
+      ? renderRecipeImage(cardImageUrl, displayLabel(r.name), 'card')
       : `<div class="card-thumb-placeholder">◈</div>`;
 
     const tags = r.ingredients.slice(0, 3)
@@ -586,7 +587,11 @@ function renderCards(list) {
     const more = r.ingredients.length > 3
       ? `<span class="ctag">+${r.ingredients.length - 3}</span>` : '';
 
-    const scoreLabel = r.score != null && r.category !== 'Ingredient' ? `<div class="card-score">${esc(r.score)}/10</div>` : '';
+    const scoreLabel = r.category !== 'Ingredient'
+      ? (r.score != null
+          ? `<div class="card-score">${esc(r.score)}/10</div>`
+          : '<div class="card-score unrated">Unrated</div>')
+      : '';
     const classification = r.category ? esc(displayLabel(r.category)) + (r.subtype ? ` · ${esc(displayLabel(r.subtype))}` : '') : '';
 
     return `
@@ -685,7 +690,11 @@ function renderDetail(recipe) {
     ${imgHtml}
     <div class="detail-inner">
       <h1 class="detail-name">${esc(displayLabel(recipe.name))}</h1>
-      ${recipe.score != null && recipe.category !== 'Ingredient' ? `<div class="detail-score">Rating ${esc(recipe.score)}/10</div>` : ''}
+      ${recipe.category !== 'Ingredient'
+        ? (recipe.score != null
+            ? `<div class="detail-score">Rating ${esc(recipe.score)}/10</div>`
+            : '<div class="detail-score unrated">Unrated</div>')
+        : ''}
 
       <div class="servings-row">
         <span class="servings-lbl">Servings</span>
@@ -869,7 +878,7 @@ function renderFormCustomFields(recipe) {
 
 function resetForm() {
   document.getElementById('f-name').value = '';
-  document.getElementById('f-score').value = '5';
+  document.getElementById('f-score').value = '';
   document.getElementById('f-category').value = 'Other';
   document.getElementById('f-subtype').value = '';
   document.getElementById('f-tags').value = '';
