@@ -371,10 +371,10 @@ def api_create_recipe():
     subtype = (data.get('subtype') or '').strip() or None
     if not category:
         return jsonify({'error': 'Category is required'}), 400
-    if subtype and category not in ('Cocktail', 'Ingredient'):
-        return jsonify({'error': 'Subtype is only allowed for Cocktail or Ingredient category'}), 400
-    if subtype and category == 'Cocktail' and subtype not in COCKTAIL_SUBTYPES:
-        return jsonify({'error': 'Invalid subtype for Cocktail'}), 400
+    if subtype and category not in ('Cocktail', 'Other', 'Ingredient'):
+        return jsonify({'error': 'Subtype is only allowed for Cocktail, Other, or Ingredient category'}), 400
+    if subtype and category in ('Cocktail', 'Other') and subtype not in COCKTAIL_SUBTYPES:
+        return jsonify({'error': 'Invalid subtype for Cocktail/Other'}), 400
     if subtype and category == 'Ingredient' and subtype not in INGREDIENT_SUBTYPES:
         return jsonify({'error': 'Invalid subtype for Ingredient'}), 400
 
@@ -422,10 +422,10 @@ def api_update_recipe(rid):
         recipe.category = category
     if 'subtype' in data:
         subtype = (data.get('subtype') or '').strip() or None
-        if subtype and recipe.category not in ('Cocktail', 'Ingredient'):
-            return jsonify({'error': 'Subtype is only allowed for Cocktail or Ingredient category'}), 400
-        if subtype and recipe.category == 'Cocktail' and subtype not in COCKTAIL_SUBTYPES:
-            return jsonify({'error': 'Invalid subtype for Cocktail'}), 400
+        if subtype and recipe.category not in ('Cocktail', 'Other', 'Ingredient'):
+            return jsonify({'error': 'Subtype is only allowed for Cocktail, Other, or Ingredient category'}), 400
+        if subtype and recipe.category in ('Cocktail', 'Other') and subtype not in COCKTAIL_SUBTYPES:
+            return jsonify({'error': 'Invalid subtype for Cocktail/Other'}), 400
         if subtype and recipe.category == 'Ingredient' and subtype not in INGREDIENT_SUBTYPES:
             return jsonify({'error': 'Invalid subtype for Ingredient'}), 400
         recipe.subtype = subtype
@@ -505,11 +505,11 @@ def api_bulk_import():
             category = (recipe_data.get('category') or 'Other').strip() or 'Other'
             subtype = (recipe_data.get('subtype') or '').strip() or None
             tags = parse_tags(recipe_data.get('tags', []))
-            if subtype and category not in ('Cocktail', 'Ingredient'):
-                errors.append(f'Recipe {i+1}: Subtype is only allowed for Cocktail or Ingredient category')
+            if subtype and category not in ('Cocktail', 'Other', 'Ingredient'):
+                errors.append(f'Recipe {i+1}: Subtype is only allowed for Cocktail, Other, or Ingredient category')
                 continue
-            if subtype and category == 'Cocktail' and subtype not in COCKTAIL_SUBTYPES:
-                errors.append(f'Recipe {i+1}: Invalid subtype for Cocktail')
+            if subtype and category in ('Cocktail', 'Other') and subtype not in COCKTAIL_SUBTYPES:
+                errors.append(f'Recipe {i+1}: Invalid subtype for Cocktail/Other')
                 continue
             if subtype and category == 'Ingredient' and subtype not in INGREDIENT_SUBTYPES:
                 errors.append(f'Recipe {i+1}: Invalid subtype for Ingredient')

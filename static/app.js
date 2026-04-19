@@ -79,7 +79,7 @@ function updateSubtypeState() {
   const subtype = document.getElementById('f-subtype');
   const scoreField = document.getElementById('f-score')?.closest('.field');
   if (!subtype) return;
-  if (category === 'Cocktail') {
+  if (category === 'Cocktail' || category === 'Other') {
     subtype.innerHTML = [''].concat(SUBTYPE_OPTIONS).map(sub => `<option value="${esc(sub)}">${esc(sub)}</option>`).join('');
     subtype.disabled = false;
     if (scoreField) scoreField.style.display = '';

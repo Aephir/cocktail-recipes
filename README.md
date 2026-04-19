@@ -95,13 +95,14 @@ Categories:
 Subtype rules:
 
 - For category `Cocktail`: `Sour`, `Aromatic`, `Old-Fashioned`, `Improved`, `Daisy`
+- For category `Other`: `Sour`, `Aromatic`, `Old-Fashioned`, `Improved`, `Daisy`
 - For category `Ingredient`: `Base`, `Modifier`, `Special Flavoring`, `Garnish`, `Other`
 - All other categories: no subtype
 
 Single-axis decision (current):
 
 - The app uses one classification axis: `category` plus an optional `subtype`.
-- `Cocktail` and `Ingredient` support subtype.
+- `Cocktail`, `Other`, and `Ingredient` support subtype.
 - All other categories are top-level families and intentionally do not support subtype.
 
 ### JSON Schema (For Automation / MCP / Bulk Tools)
@@ -176,7 +177,7 @@ Parse the following cocktail recipe text into a JSON array of recipes. Each reci
 {
   "name": "string (required)",
   "category": "Cocktail|Highball|Collins|Rickey|Buck|Fizz|Julep|Smash|Cobbler|Swizzle|Sling|Toddy|Punch|Cup|Flip|Nog|Fix|Crusta|Frappé|Shrub|Wassail Bowl|Champerelle|Other|Ingredient",
-  "subtype": "string or null (only valid for Cocktail or Ingredient)",
+  "subtype": "string or null (only valid for Cocktail, Other, or Ingredient)",
   "score": "integer 1-10 (omit or set null to use default)",
   "tags": ["string", "..."],
   "ingredients": [

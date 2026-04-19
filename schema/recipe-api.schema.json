@@ -43,7 +43,7 @@
     },
     "CocktailSubtype": {
       "type": "string",
-      "description": "Subtypes only valid when category is Cocktail. These are used for Embury-style cocktail structure, not for tall/historical families.",
+      "description": "Structural subtypes valid when category is Cocktail or Other. These are used for Embury-style cocktail structure, not for tall/historical families.",
       "enum": ["Sour", "Aromatic", "Old-Fashioned", "Improved", "Daisy"]
     },
     "IngredientSubtype": {
@@ -179,6 +179,22 @@
         },
         {
           "if": {
+            "properties": { "category": { "const": "Other" } },
+            "required": ["category"]
+          },
+          "then": {
+            "properties": {
+              "subtype": {
+                "oneOf": [
+                  { "$ref": "#/$defs/CocktailSubtype" },
+                  { "type": "null" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
             "properties": {
               "category": {
                 "enum": [
@@ -202,8 +218,7 @@
                   "Frappé",
                   "Shrub",
                   "Wassail Bowl",
-                  "Champerelle",
-                  "Other"
+                  "Champerelle"
                 ]
               }
             },
