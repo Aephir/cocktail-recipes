@@ -824,9 +824,43 @@ with app.app_context():
     if 'tags' not in recipe_columns:
         db.session.execute(text("ALTER TABLE recipes ADD COLUMN tags TEXT DEFAULT '[]'"))
         db.session.commit()
-    columns = [c['name'] for c in db.inspect(db.engine).get_columns('recipe_ingredients')]
+    ri_columns = db.inspect(db.engine).get_columns('recipe_ingredients')
+    columns = [c['name'] for c in ri_columns]
     if 'subrecipe_id' not in columns:
         db.session.execute(text('ALTER TABLE recipe_ingredients ADD COLUMN subrecipe_id INTEGER'))
+        db.session.commit()
+        ri_columns = db.inspect(db.engine).get_columns('recipe_ingredients')
+
+    ingredient_col = next((c for c in ri_columns if c['name'] == 'ingredient_id'), None)
+    if ingredient_col and not ingredient_col.get('nullable', True):
+        logger.info('Migrating recipe_ingredients: making ingredient_id nullable for subrecipe rows')
+        db.session.execute(text('PRAGMA foreign_keys=OFF'))
+        db.session.execute(text(
+            '''
+            CREATE TABLE recipe_ingredients_new (
+                id INTEGER NOT NULL PRIMARY KEY,
+                recipe_id INTEGER NOT NULL,
+                ingredient_id INTEGER,
+                subrecipe_id INTEGER,
+                amount FLOAT,
+                unit VARCHAR(50) DEFAULT 'ml',
+                "order" INTEGER DEFAULT 0,
+                FOREIGN KEY(recipe_id) REFERENCES recipes (id),
+                FOREIGN KEY(ingredient_id) REFERENCES ingredients (id),
+                FOREIGN KEY(subrecipe_id) REFERENCES recipes (id)
+            )
+            '''
+        ))
+        db.session.execute(text(
+            '''
+            INSERT INTO recipe_ingredients_new (id, recipe_id, ingredient_id, subrecipe_id, amount, unit, "order")
+            SELECT id, recipe_id, ingredient_id, subrecipe_id, amount, unit, "order"
+            FROM recipe_ingredients
+            '''
+        ))
+        db.session.execute(text('DROP TABLE recipe_ingredients'))
+        db.session.execute(text('ALTER TABLE recipe_ingredients_new RENAME TO recipe_ingredients'))
+        db.session.execute(text('PRAGMA foreign_keys=ON'))
         db.session.commit()
 
     if 'classification' in recipe_columns:
