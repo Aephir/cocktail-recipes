@@ -20,7 +20,7 @@ COCKTAIL_SUBTYPES = ['Sour', 'Aromatic', 'Old-Fashioned', 'Improved', 'Daisy']
 INGREDIENT_SUBTYPES = ['Base', 'Modifier', 'Special Flavoring', 'Garnish', 'Other']
 
 GLASS_ICON_LOOKUP = [
-    (['champagne saucer', 'champagne glass', 'saucer'], 'glass-champagne-saucer-size.svg'),
+    (['champagne saucer', 'champagne glass', 'saucer', 'coupe'], 'glass-champagne-saucer-size.svg'),
     (['collins'], 'glass-collins-size.svg'),
     (['highball'], 'glass-highball-size.svg'),
     (['nick nora', 'nick and nora', 'nick & nora', 'nick nora glass'], 'glass-nick-and-nora-size.svg'),
