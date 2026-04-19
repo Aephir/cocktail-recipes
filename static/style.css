@@ -429,9 +429,6 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .filter-num { font-size: 10px; color: var(--text-muted); }
 
-.toggle-ing-btn { width: 100%; justify-content: center; margin-bottom: 6px; }
-.toggle-ing-btn.active { background: var(--gold-dim); color: var(--gold); border-color: var(--gold-border); }
-
 .filter-list { display: flex; flex-direction: column; gap: 1px; }
 
 .fchip {
@@ -476,6 +473,34 @@ textarea { resize: vertical; min-height: 80px; }
   flex: 1;
   overflow-y: auto;
   padding: 24px 28px;
+}
+
+.overview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  margin-bottom: 14px;
+}
+
+.overview-mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.overview-mode-btn.active {
+  background: var(--gold-dim);
+  color: var(--gold);
 }
 
 .active-pills {

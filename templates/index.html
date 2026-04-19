@@ -138,7 +138,6 @@
           </h4>
           <div id="tag-list" class="filter-list"></div>
         </section>
-        <button id="toggle-ing-recipes" class="btn btn-ghost btn-sm toggle-ing-btn">Show ingredient recipes</button>
         <button id="clear-btn" class="btn btn-ghost btn-sm">Clear all</button>
       </div>
     </aside>
@@ -146,6 +145,10 @@
 
     <!-- Main -->
     <main id="main">
+      <div class="overview-toggle" role="tablist" aria-label="Recipe overview type">
+        <button id="overview-drinks" class="overview-mode-btn active" role="tab" aria-selected="true">Drinks</button>
+        <button id="overview-ingredients" class="overview-mode-btn" role="tab" aria-selected="false">Ingredients</button>
+      </div>
       <div id="active-pills" class="active-pills"></div>
       <div id="recipe-count" class="recipe-count"></div>
       <div id="grid" class="grid"></div>

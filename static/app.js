@@ -28,7 +28,7 @@ const S = {
   pendingImage: null,
   sidebarCollapsed: false,
   sidebarMobileOpen: false,
-  showIngredientRecipes: false,
+  overviewMode: 'drinks',
 };
 
 const CATEGORY_OPTIONS = [
@@ -227,14 +227,17 @@ async function loadData() {
   applyFilters();
 }
 
+function recipesForOverviewMode() {
+  if (S.overviewMode === 'ingredients') {
+    return S.recipes.filter(r => r.category === 'Ingredient');
+  }
+  return S.recipes.filter(r => r.category !== 'Ingredient');
+}
+
 /* ── Filtering (client-side) ────────────────────────────────────────────── */
 function applyFilters() {
   const q = S.search.toLowerCase().trim();
-  let list = S.recipes;
-
-  if (!S.showIngredientRecipes) {
-    list = list.filter(r => r.category !== 'Ingredient');
-  }
+  let list = recipesForOverviewMode();
 
   if (q) {
     list = list.filter(r => {
@@ -343,13 +346,14 @@ function toggleTag(name) {
   applyFilters();
 }
 
-function toggleIngredientRecipes() {
-  S.showIngredientRecipes = !S.showIngredientRecipes;
-  const btn = document.getElementById('toggle-ing-recipes');
-  if (btn) {
-    btn.textContent = S.showIngredientRecipes ? 'Hide ingredient recipes' : 'Show ingredient recipes';
-    btn.classList.toggle('active', S.showIngredientRecipes);
-  }
+function setOverviewMode(mode) {
+  S.overviewMode = mode === 'ingredients' ? 'ingredients' : 'drinks';
+  const drinksBtn = document.getElementById('overview-drinks');
+  const ingredientsBtn = document.getElementById('overview-ingredients');
+  drinksBtn?.classList.toggle('active', S.overviewMode === 'drinks');
+  ingredientsBtn?.classList.toggle('active', S.overviewMode === 'ingredients');
+  drinksBtn?.setAttribute('aria-selected', S.overviewMode === 'drinks' ? 'true' : 'false');
+  ingredientsBtn?.setAttribute('aria-selected', S.overviewMode === 'ingredients' ? 'true' : 'false');
   buildSidebar();
   applyFilters();
 }
@@ -395,9 +399,7 @@ function buildSidebar() {
   const subtypeCounts = new Map();
   const tagCounts = new Map();
 
-  const recipesForSidebar = S.showIngredientRecipes
-    ? S.recipes
-    : S.recipes.filter(r => r.category !== 'Ingredient');
+  const recipesForSidebar = recipesForOverviewMode();
   for (const r of recipesForSidebar) {
     r.ingredients.forEach(i => ingCounts.set(i.ingredient_name, (ingCounts.get(i.ingredient_name) || 0) + 1));
     r.tools.forEach(t => toolCounts.set(t.tool_name, (toolCounts.get(t.tool_name) || 0) + 1));
@@ -1279,7 +1281,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chip) toggleTag(chip.dataset.name);
   });
   document.getElementById('clear-btn').addEventListener('click', clearAllFilters);
-  document.getElementById('toggle-ing-recipes').addEventListener('click', toggleIngredientRecipes);
+  document.getElementById('overview-drinks').addEventListener('click', () => setOverviewMode('drinks'));
+  document.getElementById('overview-ingredients').addEventListener('click', () => setOverviewMode('ingredients'));
 
   /* ─ Filter mode toggles ─ */
   document.getElementById('sidebar').addEventListener('click', e => {
