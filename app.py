@@ -7,8 +7,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.exceptions import HTTPException, BadRequest
 import re
 from werkzeug.utils import secure_filename
-from werkzeug.middleware.proxy_fix import ProxyFix
 import os
+from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 CLASSIFICATION_CATEGORIES = [
@@ -124,7 +124,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-# app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # Removed as app is accessed directly
+
+
+def _read_app_version():
+    try:
+        return Path(__file__).with_name('VERSION').read_text(encoding='utf-8').strip() or 'dev'
+    except OSError:
+        return 'dev'
+
+
+APP_VERSION = _read_app_version()
 
 cookie_secure = os.environ.get('COOKIE_SECURE', 'false').lower() == 'true'
 cookie_samesite = os.environ.get('COOKIE_SAMESITE', 'Lax')
@@ -160,6 +169,21 @@ UPLOAD_THUMB_QUALITY = 76
 def _thumbnail_filename(filename):
     stem, _ = os.path.splitext(filename)
     return f'{stem}__thumb.webp'
+
+
+def _delete_upload_artifacts(filename):
+    if not filename:
+        return
+    paths = [
+        os.path.join(app.config['UPLOAD_FOLDER'], filename),
+        os.path.join(app.config['UPLOAD_FOLDER'], _thumbnail_filename(filename)),
+    ]
+    for path in paths:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            logger.warning('Failed to remove upload artifact: %s', path)
 
 
 def _optimize_and_save_upload(file_storage, output_path, thumb_output_path=None):
@@ -371,7 +395,7 @@ def admin_required(f):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', asset_version=APP_VERSION)
 
 
 @app.route('/uploads/<path:filename>')
@@ -507,6 +531,8 @@ def api_update_recipe(rid):
     recipe.procedure = data.get('procedure', recipe.procedure or '').strip()
     recipe.notes = data.get('notes', recipe.notes or '').strip()
     if 'image_filename' in data:
+        if recipe.image_filename and recipe.image_filename != data['image_filename']:
+            _delete_upload_artifacts(recipe.image_filename)
         recipe.image_filename = data['image_filename']
     recipe.updated_at = datetime.utcnow()
 
@@ -615,6 +641,8 @@ def api_bulk_import():
 @admin_required
 def api_delete_recipe(rid):
     recipe = Recipe.query.get_or_404(rid)
+    if recipe.image_filename:
+        _delete_upload_artifacts(recipe.image_filename)
     db.session.delete(recipe)
     db.session.commit()
     return jsonify({'ok': True})
@@ -638,7 +666,7 @@ def _sync_tools(recipe, tools_data):
 
         tool = None
         if tool_id:
-            tool = Tool.query.get(tool_id)
+            tool = db.session.get(Tool, tool_id)
             if tool and name and tool.name != name:
                 # If the tool id points to an existing tool but the user changed the name,
                 # link to the tool record with the new name instead of keeping the old tool.
@@ -681,7 +709,7 @@ def _sync_garnishes(recipe, garnishes_data):
 
         ingredient = None
         if ingredient_id:
-            ingredient = Ingredient.query.get(ingredient_id)
+            ingredient = db.session.get(Ingredient, ingredient_id)
         if not ingredient and garnish_text:
             ingredient = Ingredient.query.filter_by(name=garnish_text).first()
         if ingredient:
@@ -725,7 +753,7 @@ def _sync_ingredients(recipe, ingredients_data):
                 subrecipe_id = None
 
         if subrecipe_id:
-            subrecipe = Recipe.query.get(subrecipe_id)
+            subrecipe = db.session.get(Recipe, subrecipe_id)
             if not subrecipe:
                 continue
             ri = RecipeIngredient(
@@ -740,7 +768,7 @@ def _sync_ingredients(recipe, ingredients_data):
         else:
             ingredient = None
             if ingredient_id:
-                ingredient = Ingredient.query.get(ingredient_id)
+                ingredient = db.session.get(Ingredient, ingredient_id)
             if not ingredient and name:
                 ingredient = Ingredient.query.filter_by(name=name).first()
             if not ingredient and name:
@@ -767,7 +795,7 @@ def _sync_custom_fields(recipe, custom_fields_data):
             fid = int(fid_str)
         except (TypeError, ValueError):
             continue
-        if not CustomFieldDef.query.get(fid):
+        if not db.session.get(CustomFieldDef, fid):
             continue
         cv = CustomFieldValue(recipe_id=recipe.id, field_def_id=fid, value=str(value or ''))
         db.session.add(cv)
@@ -807,11 +835,20 @@ def api_update_field(fid):
     f = CustomFieldDef.query.get_or_404(fid)
     data = request.get_json() or {}
     if 'name' in data:
-        f.name = data['name'].strip()
-    if 'field_type' in data and data['field_type'] in ('text', 'url', 'textarea'):
-        f.field_type = data['field_type']
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Name is required'}), 400
+        f.name = name
+    if 'field_type' in data:
+        field_type = data.get('field_type')
+        if field_type not in ('text', 'url', 'textarea'):
+            return jsonify({'error': 'Invalid field type'}), 400
+        f.field_type = field_type
     if 'display_order' in data:
-        f.display_order = int(data['display_order'])
+        try:
+            f.display_order = int(data['display_order'])
+        except (TypeError, ValueError):
+            return jsonify({'error': 'display_order must be an integer'}), 400
     db.session.commit()
     return jsonify(f.to_dict())
 
@@ -861,7 +898,8 @@ def api_upload():
     if ext == 'gif':
         filename = secure_filename(f'{ts}_{base_name}.gif')
         f.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        return jsonify({'filename': filename, 'url': f'/uploads/{filename}'})
+        gif_url = f'/uploads/{filename}'
+        return jsonify({'filename': filename, 'url': gif_url, 'thumb_url': gif_url})
 
     filename = secure_filename(f'{ts}_{base_name}.webp')
     thumb_filename = _thumbnail_filename(filename)
@@ -895,8 +933,12 @@ with app.app_context():
     else:
         # Legacy ingredient recipes were auto-created with a default score of 5.
         # Normalize those to unrated so Ingredient records don't imply a rating.
-        db.session.execute(text("UPDATE recipes SET score=0 WHERE category='Ingredient' AND score=5"))
-        db.session.commit()
+        has_legacy_ingredient_scores = db.session.execute(text(
+            "SELECT 1 FROM recipes WHERE category='Ingredient' AND score=5 LIMIT 1"
+        )).first()
+        if has_legacy_ingredient_scores:
+            db.session.execute(text("UPDATE recipes SET score=0 WHERE category='Ingredient' AND score=5"))
+            db.session.commit()
     if 'category' not in recipe_columns:
         db.session.execute(text("ALTER TABLE recipes ADD COLUMN category VARCHAR(100) DEFAULT 'Other'"))
         db.session.commit()
@@ -986,7 +1028,7 @@ with app.app_context():
         db.session.add(u)  # Ensure user is tracked for updates
 
     _seed('ADMIN_USERNAME', 'ADMIN_PASSWORD', 'admin', 'cocktails_admin', 'admin')
-    _seed('USER_USERNAME', 'USER_PASSWORD', 'guest', 'cocktails_guest', 'user')
+    _seed('USER_USERNAME', 'USER_PASSWORD', 'user', 'cocktails_guest', 'user')
     db.session.commit()
     logger.info("User sync complete")
 

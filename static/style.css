@@ -216,6 +216,14 @@ textarea { resize: vertical; min-height: 80px; }
   margin-bottom: 32px;
 }
 
+.login-note {
+  margin-top: 14px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  text-align: center;
+}
+
 #login-screen input {
   font-size: 16px;
 }

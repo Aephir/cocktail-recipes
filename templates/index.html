@@ -6,7 +6,7 @@
 <title>Walden's Cocktail Book</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
 </head>
 <body>
 
@@ -25,6 +25,7 @@
       <input id="l-pass" type="password" placeholder="Password" autocomplete="current-password">
     </div>
     <button id="l-submit" type="submit" class="btn btn-primary w-full">Enter</button>
+    <p class="login-note">This app uses only essential cookies to sign you in and keep your login active. No analytics or advertising cookies are used.</p>
     </form>
   </div>
 </div>
@@ -357,6 +358,6 @@
   </div>
 </div>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v={{ asset_version }}"></script>
 </body>
 </html>

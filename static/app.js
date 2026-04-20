@@ -252,6 +252,37 @@ function recipesForOverviewMode() {
   return S.recipes.filter(r => r.category !== 'Ingredient');
 }
 
+function ingredientDisplayName(ingredient) {
+  return String(ingredient?.ingredient_name || ingredient?.subrecipe_name || '').trim();
+}
+
+function collectSidebarCounts(recipes) {
+  const ingCounts = new Map();
+  const toolCounts = new Map();
+  const categoryCounts = new Map();
+  const subtypeCounts = new Map();
+  const tagCounts = new Map();
+
+  for (const r of recipes) {
+    r.ingredients.forEach(i => {
+      const ingName = ingredientDisplayName(i);
+      if (!ingName) return;
+      ingCounts.set(ingName, (ingCounts.get(ingName) || 0) + 1);
+    });
+    r.tools.forEach(t => {
+      const toolName = (t.tool_name || '').trim();
+      if (!toolName) return;
+      toolCounts.set(toolName, (toolCounts.get(toolName) || 0) + 1);
+    });
+    const category = r.category || 'Other';
+    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+    if (r.subtype) subtypeCounts.set(r.subtype, (subtypeCounts.get(r.subtype) || 0) + 1);
+    (r.tags || []).forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1));
+  }
+
+  return { ingCounts, toolCounts, categoryCounts, subtypeCounts, tagCounts };
+}
+
 /* ── Filtering (client-side) ────────────────────────────────────────────── */
 function applyFilters() {
   const q = S.search.toLowerCase().trim();
@@ -295,7 +326,7 @@ function applyFilters() {
 
   if (S.activeIngs.size) {
     list = list.filter(r => {
-      const names = new Set(r.ingredients.map(i => i.ingredient_name));
+      const names = new Set(r.ingredients.map(ingredientDisplayName).filter(Boolean));
       if (S.filterModeIngs === 'all') {
         return [...S.activeIngs].every(n => names.has(n));
       } else {
@@ -411,29 +442,8 @@ function updateFilterModeButtons() {
 
 /* ── Sidebar ────────────────────────────────────────────────────────────── */
 function buildSidebar() {
-  const ingCounts = new Map();
-  const toolCounts = new Map();
-  const categoryCounts = new Map();
-  const subtypeCounts = new Map();
-  const tagCounts = new Map();
-
   const recipesForSidebar = recipesForOverviewMode();
-  for (const r of recipesForSidebar) {
-    r.ingredients.forEach(i => {
-      const ingName = (i.ingredient_name || i.subrecipe_name || '').trim();
-      if (!ingName) return;
-      ingCounts.set(ingName, (ingCounts.get(ingName) || 0) + 1);
-    });
-    r.tools.forEach(t => {
-      const toolName = (t.tool_name || '').trim();
-      if (!toolName) return;
-      toolCounts.set(toolName, (toolCounts.get(toolName) || 0) + 1);
-    });
-    const category = r.category || 'Other';
-    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
-    if (r.subtype) subtypeCounts.set(r.subtype, (subtypeCounts.get(r.subtype) || 0) + 1);
-    (r.tags || []).forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1));
-  }
+  const { ingCounts, toolCounts, categoryCounts, subtypeCounts, tagCounts } = collectSidebarCounts(recipesForSidebar);
 
   const compareEntryNames = (a, b) => String(a?.[0] || '').localeCompare(String(b?.[0] || ''));
   const sortedIngs = [...ingCounts.entries()].sort(compareEntryNames);
@@ -487,26 +497,7 @@ function refreshChipStates() {
 }
 
 function updateSidebarCounts(filtered) {
-  const ingCounts = new Map();
-  const toolCounts = new Map();
-  const categoryCounts = new Map();
-  const subtypeCounts = new Map();
-  const tagCounts = new Map();
-  for (const r of filtered) {
-    r.ingredients.forEach(i => {
-      const ingName = (i.ingredient_name || i.subrecipe_name || '').trim();
-      if (!ingName) return;
-      ingCounts.set(ingName, (ingCounts.get(ingName) || 0) + 1);
-    });
-    r.tools.forEach(t => {
-      const toolName = (t.tool_name || '').trim();
-      if (!toolName) return;
-      toolCounts.set(toolName, (toolCounts.get(toolName) || 0) + 1);
-    });
-    categoryCounts.set(r.category || 'Other', (categoryCounts.get(r.category || 'Other') || 0) + 1);
-    if (r.subtype) subtypeCounts.set(r.subtype, (subtypeCounts.get(r.subtype) || 0) + 1);
-    (r.tags || []).forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1));
-  }
+  const { ingCounts, toolCounts, categoryCounts, subtypeCounts, tagCounts } = collectSidebarCounts(filtered);
   document.querySelectorAll('#ing-list .fchip').forEach(btn => {
     btn.querySelector('.chip-ct').textContent = ingCounts.get(btn.dataset.name) || 0;
   });
@@ -581,11 +572,12 @@ function renderCards(list) {
       ? renderRecipeImage(cardImageUrl, displayLabel(r.name), 'card')
       : `<div class="card-thumb-placeholder">◈</div>`;
 
-    const tags = r.ingredients.slice(0, 3)
-      .map(i => `<span class="ctag${S.activeIngs.has(i.ingredient_name) ? ' active' : ''}">${esc(displayLabel(i.ingredient_name))}</span>`)
+    const ingredientLabels = r.ingredients.map(ingredientDisplayName).filter(Boolean);
+    const tags = ingredientLabels.slice(0, 3)
+      .map(name => `<span class="ctag${S.activeIngs.has(name) ? ' active' : ''}">${esc(displayLabel(name))}</span>`)
       .join('');
-    const more = r.ingredients.length > 3
-      ? `<span class="ctag">+${r.ingredients.length - 3}</span>` : '';
+    const more = ingredientLabels.length > 3
+      ? `<span class="ctag">+${ingredientLabels.length - 3}</span>` : '';
 
     const scoreLabel = r.category !== 'Ingredient'
       ? (r.score != null
@@ -1267,35 +1259,25 @@ async function submitBulkImport() {
     return;
   }
 
-  function normalizeJsonText(text) {
-    return text
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201c\u201d\u201e\u201f]/g, '"')
-      .replace(/[\u2013\u2014]/g, '-')
-      .replace(/\u00a0/g, ' ')
-      .replace(/,\s*(?=[}\]])/g, '');
-  }
-
-  let data;
-  const normalizedText = normalizeJsonText(jsonText);
-  try {
-    data = JSON.parse(normalizedText);
-  } catch (e) {
-    alert('Invalid JSON: ' + e.message);
-    return;
-  }
-
-  if (!Array.isArray(data)) {
-    alert('Data must be a JSON array of recipes.');
-    return;
-  }
-
   const btn = document.getElementById('bulk-import-submit');
   btn.disabled = true;
   btn.textContent = 'Importing…';
 
   try {
-    const result = await api('POST', '/api/bulk-import', data);
+    const res = await fetch('/api/bulk-import', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: jsonText,
+    });
+    const result = await res.json();
+    if (res.status === 401) {
+      showLogin();
+      throw new Error(result.code === 'AUTH_FAILED' ? result.error : 'Session expired');
+    }
+    if (!res.ok) {
+      throw new Error(result.error || `HTTP ${res.status}`);
+    }
     const resultEl = document.getElementById('bulk-import-result');
     resultEl.classList.remove('hidden');
     resultEl.className = result.imported > 0 ? 'alert-success' : 'alert-error';
