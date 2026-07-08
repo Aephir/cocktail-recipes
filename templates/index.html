@@ -150,6 +150,12 @@
         <button id="overview-drinks" class="overview-mode-btn active" role="tab" aria-selected="true">Drinks</button>
         <button id="overview-ingredients" class="overview-mode-btn" role="tab" aria-selected="false">Ingredients</button>
       </div>
+      <div id="mobile-search-wrap" class="mobile-search-wrap">
+        <label class="search-wrap">
+          <svg class="search-ico" width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/></svg>
+          <input id="search-input-mobile" type="text" placeholder="Search recipes…" autocomplete="off">
+        </label>
+      </div>
       <div id="active-pills" class="active-pills"></div>
       <div id="recipe-count" class="recipe-count"></div>
       <div id="grid" class="grid"></div>
@@ -225,7 +231,10 @@
       </div>
       <div class="field">
         <label>Tags</label>
-        <input id="f-tags" type="text" placeholder="Comma-separated tags">
+        <div id="tag-editor" class="tag-editor" aria-label="Recipe tags">
+          <div id="f-tags-chips" class="tag-chips"></div>
+          <input id="f-tags-input" type="text" placeholder="Type tag and press Enter">
+        </div>
       </div>
 
       <div class="field">
@@ -354,6 +363,29 @@
     <div class="confirm-row">
       <button id="confirm-cancel" class="btn btn-ghost">Cancel</button>
       <button id="confirm-ok" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ░░ PLACEHOLDER REMINDER ░░ -->
+<div id="placeholder-overlay" class="overlay hidden">
+  <div class="confirm-box placeholder-box">
+    <p id="placeholder-msg">Placeholder recipes were created.</p>
+    <div id="placeholder-links" class="placeholder-links"></div>
+    <div class="confirm-row">
+      <button id="placeholder-dismiss" class="btn btn-ghost">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<!-- ░░ UNKNOWN ENTRY CHOOSER ░░ -->
+<div id="resolve-overlay" class="overlay hidden">
+  <div class="confirm-box resolve-box">
+    <p id="resolve-msg">This entry does not exist yet.</p>
+    <div id="resolve-suggestions" class="resolve-suggestions"></div>
+    <div class="confirm-row resolve-actions">
+      <button id="resolve-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="resolve-create" class="btn btn-primary">Create</button>
     </div>
   </div>
 </div>

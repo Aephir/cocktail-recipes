@@ -10,6 +10,9 @@ const S = {
   recipes: [],
   ingredients: [],
   tools: [],
+  tagCatalog: [],
+  tagDisplayMap: new Map(),
+  formTags: [],
   customFields: [],     // CustomFieldDef list
   activeIngs: new Set(),
   activeTools: new Set(),
@@ -30,6 +33,9 @@ const S = {
   sidebarMobileOpen: false,
   overviewMode: 'drinks',
   detailHistory: [],
+  activeAutocomplete: null,
+  createdPlaceholdersLastSave: [],
+  resolveDialogCancel: null,
 };
 
 const CATEGORY_OPTIONS = [
@@ -58,6 +64,173 @@ function parseTags(value) {
 
 function formatTags(tags) {
   return tags.map(normalizeTag).filter(Boolean);
+}
+
+function setSearchValue(nextValue) {
+  S.search = String(nextValue || '');
+  const desktop = document.getElementById('search-input');
+  const mobile = document.getElementById('search-input-mobile');
+  if (desktop && desktop.value !== S.search) desktop.value = S.search;
+  if (mobile && mobile.value !== S.search) mobile.value = S.search;
+}
+
+function buildTagCatalog(recipes) {
+  const displayMap = new Map();
+  for (const recipe of recipes) {
+    for (const rawTag of (recipe.tags || [])) {
+      const normalized = normalizeTag(rawTag);
+      if (!normalized) continue;
+      if (!displayMap.has(normalized)) {
+        displayMap.set(normalized, String(rawTag || '').trim() || normalized.replace(/_/g, ' '));
+      }
+    }
+  }
+  S.tagDisplayMap = displayMap;
+  S.tagCatalog = [...displayMap.keys()];
+}
+
+function displayTag(tag) {
+  const normalized = normalizeTag(tag);
+  const source = S.tagDisplayMap.get(normalized) || normalized.replace(/_/g, ' ');
+  return displayLabel(source);
+}
+
+function closeAutocomplete() {
+  const menu = document.getElementById('autocomplete-menu');
+  if (!menu) return;
+  menu.classList.add('hidden');
+  menu.innerHTML = '';
+  S.activeAutocomplete = null;
+}
+
+function positionAutocompleteMenu(inputEl, menu) {
+  const rect = inputEl.getBoundingClientRect();
+  const width = Math.max(rect.width, 220);
+  menu.style.left = `${Math.max(8, rect.left)}px`;
+  menu.style.top = `${rect.bottom + 4}px`;
+  menu.style.width = `${Math.min(width, window.innerWidth - 16)}px`;
+}
+
+function ensureAutocompleteMenu() {
+  let menu = document.getElementById('autocomplete-menu');
+  if (menu) return menu;
+  menu = document.createElement('div');
+  menu.id = 'autocomplete-menu';
+  menu.className = 'autocomplete-menu hidden';
+  menu.setAttribute('role', 'listbox');
+  document.body.appendChild(menu);
+
+  menu.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const option = e.target.closest('.suggestion-item[data-idx]');
+    if (!option || !S.activeAutocomplete) return;
+    const idx = Number(option.dataset.idx);
+    const item = S.activeAutocomplete.items[idx];
+    if (!item) return;
+    try {
+      const result = S.activeAutocomplete.onSelect(item);
+      if (result && typeof result.catch === 'function') {
+        result.catch(err => console.error('Autocomplete selection failed:', err));
+      }
+    } catch (err) {
+      console.error('Autocomplete selection failed:', err);
+    }
+    closeAutocomplete();
+  });
+  return menu;
+}
+
+function openAutocomplete(inputEl, items, onSelect) {
+  const menu = ensureAutocompleteMenu();
+  if (!items.length) {
+    closeAutocomplete();
+    return;
+  }
+  S.activeAutocomplete = {
+    inputEl,
+    items,
+    onSelect,
+    activeIndex: 0,
+  };
+
+  menu.innerHTML = items.map((item, idx) => {
+    const note = item.note
+      ? `<span class="suggestion-note${item.noteType ? ` suggestion-note-${esc(item.noteType)}` : ''}">${esc(item.note)}</span>`
+      : '';
+    return `<button type="button" class="suggestion-item${idx === 0 ? ' active' : ''}" data-idx="${idx}" role="option">${esc(item.label)}${note}</button>`;
+  }).join('');
+
+  positionAutocompleteMenu(inputEl, menu);
+  menu.classList.remove('hidden');
+}
+
+function setAutocompleteActiveIndex(nextIndex) {
+  if (!S.activeAutocomplete) return;
+  const { items } = S.activeAutocomplete;
+  const clamped = Math.max(0, Math.min(items.length - 1, nextIndex));
+  S.activeAutocomplete.activeIndex = clamped;
+  const menu = document.getElementById('autocomplete-menu');
+  if (!menu) return;
+  menu.querySelectorAll('.suggestion-item').forEach((el, idx) => {
+    el.classList.toggle('active', idx === clamped);
+  });
+}
+
+function attachAutocomplete(inputEl, options) {
+  if (!inputEl || inputEl.dataset.autocompleteBound === '1') return;
+  inputEl.dataset.autocompleteBound = '1';
+
+  const refresh = () => {
+    if (document.activeElement !== inputEl) return;
+    const query = inputEl.value.trim();
+    const items = options.getItems(query, inputEl);
+    if (!items.length) {
+      closeAutocomplete();
+      return;
+    }
+    openAutocomplete(inputEl, items, item => options.onSelect(item, inputEl));
+  };
+
+  inputEl.addEventListener('focus', refresh);
+  inputEl.addEventListener('input', refresh);
+  inputEl.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (document.activeElement !== inputEl) closeAutocomplete();
+    }, 120);
+  });
+
+  inputEl.addEventListener('keydown', e => {
+    if (!S.activeAutocomplete || S.activeAutocomplete.inputEl !== inputEl) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setAutocompleteActiveIndex(S.activeAutocomplete.activeIndex + 1);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setAutocompleteActiveIndex(S.activeAutocomplete.activeIndex - 1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const item = S.activeAutocomplete.items[S.activeAutocomplete.activeIndex];
+      if (!item) return;
+      try {
+        const result = options.onSelect(item, inputEl);
+        if (result && typeof result.catch === 'function') {
+          result.catch(err => console.error('Autocomplete selection failed:', err));
+        }
+      } catch (err) {
+        console.error('Autocomplete selection failed:', err);
+      }
+      closeAutocomplete();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeAutocomplete();
+    }
+  });
 }
 
 function isBuiltInIconUrl(url) {
@@ -240,6 +413,7 @@ async function loadData() {
   ]);
   S.recipes = recipes;
   S.customFields = fields;
+  buildTagCatalog(recipes);
   buildSidebar();
   updateFilterModeButtons();
   applyFilters();
@@ -418,10 +592,7 @@ function clearAllFilters() {
   S.filterModeCategories = 'all';
   S.filterModeSubtypes = 'all';
   S.filterModeTags = 'all';
-  S.search = '';
-
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) searchInput.value = '';
+  setSearchValue('');
 
   refreshChipStates();
   updateFilterModeButtons();
@@ -789,13 +960,314 @@ function updateDetailScale() {
 }
 
 /* ── Recipe Form ────────────────────────────────────────────────────────── */
+function findIngredientByName(name) {
+  const needle = String(name || '').trim().toLowerCase();
+  if (!needle) return null;
+  return S.ingredients.find(i => i.name.toLowerCase() === needle) || null;
+}
+
+function findRecipeByName(name) {
+  const needle = String(name || '').trim().toLowerCase();
+  if (!needle) return null;
+  return S.recipes.find(r => r.name.toLowerCase() === needle) || null;
+}
+
+function rankSuggestions(items, query, getLabel, limit = 8) {
+  const q = query.toLowerCase();
+  const starts = [];
+  const contains = [];
+  for (const item of items) {
+    const label = getLabel(item).toLowerCase();
+    if (!q || label.startsWith(q)) starts.push(item);
+    else if (label.includes(q)) contains.push(item);
+  }
+  return starts.concat(contains).slice(0, limit);
+}
+
+function levenshteinDistance(a, b) {
+  const left = String(a || '');
+  const right = String(b || '');
+  const rows = left.length + 1;
+  const cols = right.length + 1;
+  const dp = Array.from({ length: rows }, (_, i) => {
+    const row = new Array(cols).fill(0);
+    row[0] = i;
+    return row;
+  });
+  for (let j = 0; j < cols; j += 1) dp[0][j] = j;
+
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      );
+    }
+  }
+  return dp[rows - 1][cols - 1];
+}
+
+function rankDidYouMean(items, query, getLabel, limit = 3) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+
+  const scored = items.map(item => {
+    const label = String(getLabel(item) || '').trim();
+    const ll = label.toLowerCase();
+    let score;
+    if (ll === q) {
+      score = 0;
+    } else if (ll.startsWith(q)) {
+      score = 0.4 + Math.abs(ll.length - q.length) / 100;
+    } else if (ll.includes(q)) {
+      score = 0.9 + ll.indexOf(q) / 50 + Math.abs(ll.length - q.length) / 100;
+    } else {
+      const dist = levenshteinDistance(q, ll);
+      score = 1.5 + dist / Math.max(ll.length, q.length, 1);
+    }
+    return { item, label, score };
+  });
+
+  scored.sort((a, b) => (a.score - b.score) || a.label.localeCompare(b.label));
+  return scored.slice(0, limit).map(s => s.item);
+}
+
+function getIngredientSuggestions(query) {
+  return rankSuggestions(S.ingredients, query, i => i.name).map(i => ({
+    label: i.name,
+    value: i.id,
+  }));
+}
+
+function getRecipeSuggestions(query) {
+  return rankSuggestions(S.recipes, query, r => r.name).map(r => ({
+    label: r.name,
+    value: r.id,
+  }));
+}
+
+function getTagSuggestions(query) {
+  const selected = new Set(S.formTags.map(normalizeTag));
+  const normalizedQuery = normalizeTag(query);
+  const tagItems = S.tagCatalog
+    .filter(tag => !selected.has(tag))
+    .map(tag => ({
+      normalized: tag,
+      label: displayTag(tag),
+    }));
+  const matches = rankSuggestions(tagItems, query, t => t.label).map(t => ({
+    label: t.label,
+    value: t.normalized,
+    note: 'Existing',
+    noteType: 'existing',
+  }));
+
+  const hasExact = !!normalizedQuery && tagItems.some(t => t.normalized === normalizedQuery);
+  if (normalizedQuery && !selected.has(normalizedQuery) && !hasExact) {
+    matches.unshift({
+      label: `Create "${String(query || '').trim()}"`,
+      value: normalizedQuery,
+      raw: String(query || '').trim(),
+      create: true,
+      note: 'New',
+      noteType: 'new',
+    });
+  }
+
+  return matches.slice(0, 8);
+}
+
+function getTagDidYouMeanSuggestions(query) {
+  const selected = new Set(S.formTags.map(normalizeTag));
+  const tagItems = S.tagCatalog
+    .filter(tag => !selected.has(tag))
+    .map(tag => ({
+      normalized: tag,
+      label: displayTag(tag),
+      value: tag,
+    }));
+
+  return rankDidYouMean(tagItems, query, t => t.label, 3).map(t => ({
+    label: t.label,
+    value: t.value,
+  }));
+}
+
+function getRecipeDidYouMeanSuggestions(query) {
+  return rankDidYouMean(S.recipes, query, r => r.name, 3).map(r => ({
+    label: r.name,
+    value: r.id,
+  }));
+}
+
+function renderFormTags() {
+  const chips = document.getElementById('f-tags-chips');
+  if (!chips) return;
+  chips.innerHTML = S.formTags.map(tag => `
+    <span class="tag-chip" data-tag="${esc(tag)}">
+      <span>${esc(displayTag(tag))}</span>
+      <button type="button" data-remove-tag="${esc(tag)}" aria-label="Remove tag">×</button>
+    </span>
+  `).join('');
+}
+
+function addFormTag(tag, addToCatalog = false) {
+  const normalized = normalizeTag(tag);
+  if (!normalized) return;
+  if (S.formTags.includes(normalized)) return;
+  S.formTags.push(normalized);
+  if (addToCatalog && !S.tagDisplayMap.has(normalized)) {
+    S.tagDisplayMap.set(normalized, String(tag || '').trim());
+    S.tagCatalog = [...new Set([...S.tagCatalog, normalized])];
+  }
+  renderFormTags();
+}
+
+function removeFormTag(tag) {
+  const normalized = normalizeTag(tag);
+  S.formTags = S.formTags.filter(t => t !== normalized);
+  renderFormTags();
+}
+
+function showResolveDialog({ message, suggestions, createLabel = 'Create' }) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('resolve-overlay');
+    const msg = document.getElementById('resolve-msg');
+    const list = document.getElementById('resolve-suggestions');
+    const createBtn = document.getElementById('resolve-create');
+    const cancelBtn = document.getElementById('resolve-cancel');
+    if (!overlay || !msg || !list || !createBtn || !cancelBtn) {
+      resolve({ action: 'cancel' });
+      return;
+    }
+
+    msg.textContent = message;
+    createBtn.textContent = createLabel;
+    list.innerHTML = (suggestions || []).slice(0, 3).map((item, idx) => (
+      `<button type="button" class="resolve-suggestion-btn" data-resolve-idx="${idx}">Did you mean ${esc(item.label)}?</button>`
+    )).join('');
+
+    let done = false;
+    const cleanup = (result) => {
+      if (done) return;
+      done = true;
+      overlay.classList.add('hidden');
+      overlay.removeEventListener('click', onOverlayClick);
+      list.removeEventListener('click', onListClick);
+      createBtn.removeEventListener('click', onCreate);
+      cancelBtn.removeEventListener('click', onCancel);
+      S.resolveDialogCancel = null;
+      resolve(result);
+    };
+
+    const onOverlayClick = (e) => {
+      if (e.target === overlay) cleanup({ action: 'cancel' });
+    };
+    const onListClick = (e) => {
+      const btn = e.target.closest('button[data-resolve-idx]');
+      if (!btn) return;
+      const picked = suggestions[Number(btn.dataset.resolveIdx)];
+      if (!picked) return;
+      cleanup({ action: 'use', suggestion: picked });
+    };
+    const onCreate = () => cleanup({ action: 'create' });
+    const onCancel = () => cleanup({ action: 'cancel' });
+
+    overlay.addEventListener('click', onOverlayClick);
+    list.addEventListener('click', onListClick);
+    createBtn.addEventListener('click', onCreate);
+    cancelBtn.addEventListener('click', onCancel);
+    S.resolveDialogCancel = () => cleanup({ action: 'cancel' });
+    overlay.classList.remove('hidden');
+  });
+}
+
+async function resolveUnknownTag(rawTag) {
+  const raw = String(rawTag || '').trim();
+  if (!raw) return false;
+
+  const normalized = normalizeTag(raw);
+  if (S.tagCatalog.includes(normalized)) {
+    addFormTag(normalized);
+    return true;
+  }
+
+  const didYouMean = getTagDidYouMeanSuggestions(raw);
+  const decision = await showResolveDialog({
+    message: `Tag "${raw}" does not exist yet.`,
+    suggestions: didYouMean,
+    createLabel: `Create "${raw}"`,
+  });
+
+  if (decision.action === 'use' && decision.suggestion) {
+    addFormTag(decision.suggestion.value);
+    return true;
+  }
+  if (decision.action === 'create') {
+    addFormTag(raw, true);
+    return true;
+  }
+  return false;
+}
+
+async function ensurePendingTagCommitted() {
+  const input = document.getElementById('f-tags-input');
+  if (!input) return true;
+  const raw = input.value.trim();
+  if (!raw) return true;
+
+  const committed = await resolveUnknownTag(raw);
+  if (!committed) return false;
+  input.value = '';
+  closeAutocomplete();
+  return true;
+}
+
+function bindTagComposerEvents() {
+  const tagsInput = document.getElementById('f-tags-input');
+  const chips = document.getElementById('f-tags-chips');
+  if (!tagsInput || tagsInput.dataset.bound === '1') return;
+  tagsInput.dataset.bound = '1';
+
+  attachAutocomplete(tagsInput, {
+    getItems: query => getTagSuggestions(query),
+    onSelect: async item => {
+      if (item.create) {
+        const committed = await resolveUnknownTag(item.raw);
+        if (!committed) return;
+      } else {
+        addFormTag(item.value);
+      }
+      tagsInput.value = '';
+      closeAutocomplete();
+    },
+  });
+
+  tagsInput.addEventListener('keydown', async e => {
+    if (e.key !== 'Enter') return;
+    if (S.activeAutocomplete && S.activeAutocomplete.inputEl === tagsInput) return;
+    e.preventDefault();
+    await ensurePendingTagCommitted();
+  });
+
+  chips.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-remove-tag]');
+    if (!btn) return;
+    removeFormTag(btn.dataset.removeTag);
+  });
+}
+
 async function openAddForm() {
   S.editingId = null;
   S.pendingImage = null;
+  S.createdPlaceholdersLastSave = [];
   resetForm();
   document.getElementById('form-title').textContent = 'New Recipe';
   await populateAutocomplete();
   renderFormCustomFields(S.editingId ? S.recipes.find(r => r.id === S.editingId) : null);
+  bindTagComposerEvents();
   document.getElementById('form-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
   document.getElementById('f-name').focus();
@@ -815,7 +1287,8 @@ async function openEditForm() {
   document.getElementById('f-proc').value = recipe.procedure || '';
   document.getElementById('f-notes').value = recipe.notes || '';
   document.getElementById('f-category').value = recipe.category || 'Other';
-  document.getElementById('f-tags').value = (recipe.tags || []).join(', ');
+  S.formTags = (recipe.tags || []).map(normalizeTag).filter(Boolean);
+  renderFormTags();
   updateSubtypeState();
   document.getElementById('f-subtype').value = recipe.subtype || '';
 
@@ -833,6 +1306,7 @@ async function openEditForm() {
 
   await populateAutocomplete();
   renderFormCustomFields(recipe);
+  bindTagComposerEvents();
   document.getElementById('form-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 }
@@ -873,7 +1347,10 @@ function resetForm() {
   document.getElementById('f-score').value = '';
   document.getElementById('f-category').value = 'Other';
   document.getElementById('f-subtype').value = '';
-  document.getElementById('f-tags').value = '';
+  S.formTags = [];
+  renderFormTags();
+  const tagsInput = document.getElementById('f-tags-input');
+  if (tagsInput) tagsInput.value = '';
   updateSubtypeState();
   document.getElementById('f-proc').value = '';
   document.getElementById('f-notes').value = '';
@@ -892,6 +1369,112 @@ function resetForm() {
 function closeForm() {
   document.getElementById('form-overlay').classList.add('hidden');
   document.body.style.overflow = '';
+}
+
+async function createPlaceholderRecipe(name) {
+  return api('POST', '/api/recipes', {
+    name: String(name || '').trim(),
+    score: null,
+    category: 'Other',
+    subtype: null,
+    tags: ['placeholder'],
+    procedure: '',
+    notes: 'Placeholder recipe created while linking an ingredient sub-recipe.',
+    ingredients: [],
+    tools: [],
+    garnishes: [],
+    custom_fields: {},
+    image_filename: null,
+  });
+}
+
+async function ensureSubrecipesResolved() {
+  const pending = new Map();
+
+  document.querySelectorAll('.ing-row').forEach(row => {
+    const recipeInput = row.querySelector('.f-ing-recipe');
+    const subrecipeIdInput = row.querySelector('.f-ing-subrecipe-id');
+    const value = recipeInput.value.trim();
+    if (!value) return;
+
+    const existing = findRecipeByName(value);
+    if (existing) {
+      recipeInput.value = existing.name;
+      subrecipeIdInput.value = String(existing.id);
+      return;
+    }
+
+    subrecipeIdInput.value = '';
+    const key = value.toLowerCase();
+    if (!pending.has(key)) pending.set(key, { name: value, rows: [] });
+    pending.get(key).rows.push(row);
+  });
+
+  const created = [];
+  for (const pendingRecipe of pending.values()) {
+    const suggestions = getRecipeDidYouMeanSuggestions(pendingRecipe.name);
+    const decision = await showResolveDialog({
+      message: `Recipe "${pendingRecipe.name}" does not exist yet.`,
+      suggestions,
+      createLabel: `Create placeholder "${pendingRecipe.name}"`,
+    });
+
+    if (decision.action === 'cancel') {
+      const firstInput = pendingRecipe.rows[0]?.querySelector('.f-ing-recipe');
+      firstInput?.focus();
+      return { ok: false, created: [] };
+    }
+
+    if (decision.action === 'use' && decision.suggestion) {
+      pendingRecipe.rows.forEach(row => {
+        row.querySelector('.f-ing-recipe').value = decision.suggestion.label;
+        row.querySelector('.f-ing-subrecipe-id').value = String(decision.suggestion.value);
+      });
+      continue;
+    }
+
+    const createdRecipe = await createPlaceholderRecipe(pendingRecipe.name);
+    created.push({ id: createdRecipe.id, name: createdRecipe.name });
+    S.recipes.push(createdRecipe);
+    pendingRecipe.rows.forEach(row => {
+      row.querySelector('.f-ing-recipe').value = createdRecipe.name;
+      row.querySelector('.f-ing-subrecipe-id').value = String(createdRecipe.id);
+    });
+  }
+
+  return { ok: true, created };
+}
+
+function hidePlaceholderReminder() {
+  document.getElementById('placeholder-overlay')?.classList.add('hidden');
+}
+
+function showPlaceholderReminder(placeholders) {
+  if (!placeholders.length) return;
+  const overlay = document.getElementById('placeholder-overlay');
+  const msg = document.getElementById('placeholder-msg');
+  const links = document.getElementById('placeholder-links');
+  if (!overlay || !msg || !links) return;
+
+  msg.textContent = placeholders.length === 1
+    ? 'A placeholder recipe was created. Open it now to finish setup:'
+    : 'Placeholder recipes were created. Open any of these now to finish setup:';
+
+  links.innerHTML = placeholders
+    .map(item => `<button type="button" class="placeholder-link-btn" data-placeholder-id="${item.id}">Edit ${esc(displayLabel(item.name))}</button>`)
+    .join('');
+
+  links.querySelectorAll('button[data-placeholder-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const recipeId = Number(btn.dataset.placeholderId);
+      hidePlaceholderReminder();
+      await loadData();
+      openRecipe(recipeId, { resetHistory: true });
+      await openEditForm();
+    });
+  });
+
+  overlay.classList.remove('hidden');
 }
 
 async function populateAutocomplete() {
@@ -944,13 +1527,31 @@ function addIngRow(amount = '', unit = 'ml', name = '', subrecipeName = '', subr
   const subrecipeIdInput = row.querySelector('.f-ing-subrecipe-id');
   const nameInput = row.querySelector('.f-ing-name');
   const ingredientIdInput = row.querySelector('.f-ing-ingredient-id');
+
   recipeInput.addEventListener('input', () => {
-    const match = S.recipes.find(r => r.name.toLowerCase() === recipeInput.value.trim().toLowerCase());
+    const match = findRecipeByName(recipeInput.value);
     subrecipeIdInput.value = match ? String(match.id) : '';
   });
+
   nameInput.addEventListener('input', () => {
-    const match = S.ingredients.find(i => i.name.toLowerCase() === nameInput.value.trim().toLowerCase());
+    const match = findIngredientByName(nameInput.value);
     ingredientIdInput.value = match ? String(match.id) : '';
+  });
+
+  attachAutocomplete(nameInput, {
+    getItems: query => getIngredientSuggestions(query),
+    onSelect: item => {
+      nameInput.value = item.label;
+      ingredientIdInput.value = String(item.value);
+    },
+  });
+
+  attachAutocomplete(recipeInput, {
+    getItems: query => getRecipeSuggestions(query),
+    onSelect: item => {
+      recipeInput.value = item.label;
+      subrecipeIdInput.value = String(item.value);
+    },
   });
 
   row.addEventListener('dragstart', e => {
@@ -1062,6 +1663,11 @@ async function saveRecipe() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { alert('Please enter a recipe name.'); return; }
 
+  if (!(await ensurePendingTagCommitted())) return;
+  const placeholderResult = await ensureSubrecipesResolved();
+  if (!placeholderResult.ok) return;
+  S.createdPlaceholdersLastSave = placeholderResult.created;
+
   const ingredients = [];
   document.querySelectorAll('.ing-row').forEach(row => {
     const amtStr = row.querySelector('.f-ing-amt').value.trim();
@@ -1115,7 +1721,7 @@ async function saveRecipe() {
     score: parseInt(document.getElementById('f-score').value, 10) || null,
     category,
     subtype,
-    tags: parseTags(document.getElementById('f-tags').value),
+    tags: S.formTags,
     procedure: document.getElementById('f-proc').value.trim(),
     notes: document.getElementById('f-notes').value.trim(),
     ingredients,
@@ -1139,6 +1745,7 @@ async function saveRecipe() {
     closeForm();
     await loadData();
     if (editId) openRecipe(editId, { resetHistory: true });
+    showPlaceholderReminder(S.createdPlaceholdersLastSave);
   } catch (e) {
     alert(`Save failed: ${e.message}`);
   } finally {
@@ -1459,10 +2066,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ─ Search ─ */
   let searchTimer;
-  document.getElementById('search-input').addEventListener('input', e => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => { S.search = e.target.value; applyFilters(); }, 180);
-  });
+  const bindSearchInput = (el) => {
+    if (!el) return;
+    el.addEventListener('input', e => {
+      clearTimeout(searchTimer);
+      const value = e.target.value;
+      searchTimer = setTimeout(() => {
+        setSearchValue(value);
+        applyFilters();
+      }, 180);
+    });
+  };
+  bindSearchInput(document.getElementById('search-input'));
+  bindSearchInput(document.getElementById('search-input-mobile'));
 
   document.getElementById('sort-by').addEventListener('change', () => applyFilters());
 
@@ -1520,6 +2136,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (menuWrapper && !menuWrapper.contains(e.target)) {
       closeMobileMenu();
     }
+    if (!e.target.closest('.autocomplete-menu')) {
+      const activeInput = S.activeAutocomplete?.inputEl;
+      if (!activeInput || !activeInput.contains(e.target)) closeAutocomplete();
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    const menu = document.getElementById('autocomplete-menu');
+    if (!menu || menu.classList.contains('hidden') || !S.activeAutocomplete) return;
+    positionAutocompleteMenu(S.activeAutocomplete.inputEl, menu);
   });
 
   /* ─ Detail panel ─ */
@@ -1554,13 +2180,23 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('add-tool').addEventListener('click', () => addToolRow());
   setupIngredientReorder();
 
+  document.getElementById('placeholder-dismiss').addEventListener('click', hidePlaceholderReminder);
+  document.getElementById('placeholder-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('placeholder-overlay')) hidePlaceholderReminder();
+  });
+
   /* ─ Image upload ─ */
   setupImageUpload();
 
   /* ─ Keyboard ─ */
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (!document.getElementById('confirm-overlay').classList.contains('hidden')) {
+    if (!document.getElementById('resolve-overlay').classList.contains('hidden')) {
+      if (typeof S.resolveDialogCancel === 'function') S.resolveDialogCancel();
+      else document.getElementById('resolve-overlay').classList.add('hidden');
+    } else if (!document.getElementById('placeholder-overlay').classList.contains('hidden')) {
+      hidePlaceholderReminder();
+    } else if (!document.getElementById('confirm-overlay').classList.contains('hidden')) {
       document.getElementById('confirm-overlay').classList.add('hidden');
     } else if (!document.getElementById('form-overlay').classList.contains('hidden')) {
       closeForm();
