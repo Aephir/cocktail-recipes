@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import text
+from sqlalchemy import text, or_
 import json
+import hashlib
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.exceptions import HTTPException, BadRequest
@@ -235,6 +236,37 @@ class Tool(db.Model):
     name = db.Column(db.String(200), unique=True, nullable=False)
 
 
+class OperationLog(db.Model):
+    __tablename__ = 'operation_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    actor = db.Column(db.String(80), nullable=False)
+    action = db.Column(db.String(120), nullable=False)
+    dry_run = db.Column(db.Boolean, default=True, nullable=False)
+    status = db.Column(db.String(30), default='ok', nullable=False)
+    summary = db.Column(db.Text, default='')
+    params_json = db.Column(db.Text, default='{}')
+    params_hash = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        payload = {}
+        try:
+            payload = json.loads(self.params_json or '{}')
+        except Exception:
+            payload = {'raw': self.params_json}
+        return {
+            'id': self.id,
+            'actor': self.actor,
+            'action': self.action,
+            'dry_run': bool(self.dry_run),
+            'status': self.status,
+            'summary': self.summary or '',
+            'params': payload,
+            'params_hash': self.params_hash,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class CustomFieldDef(db.Model):
     __tablename__ = 'custom_field_defs'
     id = db.Column(db.Integer, primary_key=True)
@@ -389,6 +421,66 @@ def admin_required(f):
             return jsonify({'error': 'Admin access required'}), 403
         return f(*args, **kwargs)
     return decorated
+
+
+def _parse_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'on')
+    return default
+
+
+def _extract_dry_run(data):
+    if isinstance(data, dict) and 'dry_run' in data:
+        return _parse_bool(data.get('dry_run'), default=True)
+    return _parse_bool(request.args.get('dry_run'), default=True)
+
+
+def _normalized_name(value):
+    return str(value or '').strip()
+
+
+def _normalized_key(value):
+    return _normalized_name(value).casefold()
+
+
+def _build_operation_summary(action, dry_run, details):
+    summary = dict(details or {})
+    summary['action'] = action
+    summary['dry_run'] = bool(dry_run)
+    return summary
+
+
+def _record_operation(action, dry_run, details, status='ok'):
+    params_json = json.dumps(_build_operation_summary(action, dry_run, details), sort_keys=True)
+    actor = current_user.username if current_user.is_authenticated else 'system'
+    op = OperationLog(
+        actor=actor,
+        action=action,
+        dry_run=bool(dry_run),
+        status=status,
+        summary=(details or {}).get('summary', ''),
+        params_json=params_json,
+        params_hash=hashlib.sha256(params_json.encode('utf-8')).hexdigest(),
+    )
+    db.session.add(op)
+    db.session.flush()
+    return op
+
+
+def _ingredient_usage_counts(ingredient_id):
+    ingredient_refs = RecipeIngredient.query.filter_by(ingredient_id=ingredient_id).count()
+    garnish_refs = RecipeGarnish.query.filter_by(ingredient_id=ingredient_id).count()
+    return {'recipe_ingredients': ingredient_refs, 'recipe_garnishes': garnish_refs}
+
+
+def _tool_usage_count(tool_id):
+    return RecipeTool.query.filter_by(tool_id=tool_id).count()
 
 
 # ── Frontend ─────────────────────────────────────────────────────────────────
@@ -871,10 +963,493 @@ def api_ingredients():
     return jsonify([{'id': i.id, 'name': i.name} for i in Ingredient.query.order_by(Ingredient.name).all()])
 
 
+@app.route('/api/admin/ingredients', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_create_ingredient():
+    data = request.get_json() or {}
+    name = _normalized_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    existing = Ingredient.query.filter(db.func.lower(Ingredient.name) == name.lower()).first()
+    if existing:
+        return jsonify({'error': 'Ingredient already exists', 'ingredient': {'id': existing.id, 'name': existing.name}}), 409
+    ingredient = Ingredient(name=name)
+    db.session.add(ingredient)
+    op = _record_operation('ingredient.create', dry_run=False, details={'ingredient_name': name, 'summary': f'Created ingredient {name}'})
+    db.session.commit()
+    return jsonify({'id': ingredient.id, 'name': ingredient.name, 'operation_id': op.id}), 201
+
+
+@app.route('/api/admin/ingredients/<int:iid>', methods=['PUT'])
+@login_required
+@admin_required
+def api_admin_rename_ingredient(iid):
+    ingredient = Ingredient.query.get_or_404(iid)
+    data = request.get_json() or {}
+    dry_run = _extract_dry_run(data)
+    name = _normalized_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    if _normalized_key(name) == _normalized_key(ingredient.name):
+        preview = {
+            'action': 'ingredient.rename',
+            'dry_run': dry_run,
+            'current_name': ingredient.name,
+            'new_name': name,
+            'changed': False,
+            'reason': 'No effective change',
+        }
+        op = _record_operation('ingredient.rename', dry_run=dry_run, details={'summary': 'No-op ingredient rename', **preview})
+        db.session.commit()
+        return jsonify({**preview, 'operation_id': op.id})
+
+    conflict = Ingredient.query.filter(db.func.lower(Ingredient.name) == name.lower(), Ingredient.id != iid).first()
+    if conflict:
+        return jsonify({
+            'error': 'Target name already exists as another ingredient',
+            'conflict': {'id': conflict.id, 'name': conflict.name},
+            'hint': 'Use ingredient merge endpoint instead',
+        }), 409
+
+    preview = {
+        'action': 'ingredient.rename',
+        'dry_run': dry_run,
+        'ingredient_id': iid,
+        'current_name': ingredient.name,
+        'new_name': name,
+        'changed': True,
+    }
+    if not dry_run:
+        ingredient.name = name
+    op = _record_operation('ingredient.rename', dry_run=dry_run, details={'summary': f'Renamed ingredient {ingredient.name} -> {name}', **preview})
+    db.session.commit()
+    return jsonify({**preview, 'operation_id': op.id})
+
+
+@app.route('/api/admin/ingredients/<int:iid>', methods=['DELETE'])
+@login_required
+@admin_required
+def api_admin_delete_ingredient(iid):
+    ingredient = Ingredient.query.get_or_404(iid)
+    dry_run = _parse_bool(request.args.get('dry_run'), default=True)
+    force = _parse_bool(request.args.get('force'), default=False)
+    usage = _ingredient_usage_counts(iid)
+    total_refs = usage['recipe_ingredients'] + usage['recipe_garnishes']
+    if total_refs > 0 and not force:
+        return jsonify({
+            'error': 'Ingredient is in use',
+            'usage': usage,
+            'hint': 'Use force=true only when intentional, or merge into canonical ingredient',
+        }), 409
+
+    preview = {
+        'action': 'ingredient.delete',
+        'dry_run': dry_run,
+        'force': force,
+        'ingredient': {'id': ingredient.id, 'name': ingredient.name},
+        'usage': usage,
+        'deleted': total_refs == 0 or force,
+    }
+    if not dry_run and (total_refs == 0 or force):
+        if force:
+            RecipeIngredient.query.filter_by(ingredient_id=iid).delete()
+            RecipeGarnish.query.filter_by(ingredient_id=iid).delete()
+        db.session.delete(ingredient)
+    op = _record_operation('ingredient.delete', dry_run=dry_run, details={'summary': f'Delete ingredient {ingredient.name}', **preview})
+    db.session.commit()
+    return jsonify({**preview, 'operation_id': op.id})
+
+
+@app.route('/api/admin/ingredients/merge', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_merge_ingredients():
+    data = request.get_json() or {}
+    dry_run = _extract_dry_run(data)
+    source_id = data.get('source_id')
+    target_id = data.get('target_id')
+    target_name = _normalized_name(data.get('target_name'))
+
+    try:
+        source_id = int(source_id)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'source_id must be an integer'}), 400
+
+    if target_id is None and not target_name:
+        return jsonify({'error': 'Provide target_id or target_name'}), 400
+
+    source = db.session.get(Ingredient, source_id)
+    if not source:
+        return jsonify({'error': 'source ingredient not found'}), 404
+
+    target = None
+    created_target = False
+    preview_target_name = None
+    if target_id is not None:
+        try:
+            target_id = int(target_id)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'target_id must be an integer'}), 400
+        target = db.session.get(Ingredient, target_id)
+    elif target_name:
+        target = Ingredient.query.filter(db.func.lower(Ingredient.name) == target_name.lower()).first()
+        if not target:
+            preview_target_name = target_name
+            if not dry_run:
+                target = Ingredient(name=target_name)
+                db.session.add(target)
+                db.session.flush()
+                created_target = True
+
+    if not target and not (dry_run and preview_target_name):
+        return jsonify({'error': 'target ingredient not found'}), 404
+    if target and source.id == target.id:
+        return jsonify({'error': 'source_id and target_id cannot be the same'}), 400
+
+    ingredient_links = RecipeIngredient.query.filter_by(ingredient_id=source.id).all()
+    garnish_links = RecipeGarnish.query.filter_by(ingredient_id=source.id).all()
+    garnish_text_matches = RecipeGarnish.query.filter(db.func.lower(db.func.trim(RecipeGarnish.garnish_text)) == source.name.lower()).all()
+
+    preview = {
+        'action': 'ingredient.merge',
+        'dry_run': dry_run,
+        'source': {'id': source.id, 'name': source.name},
+        'target': {
+            'id': target.id if target else None,
+            'name': target.name if target else preview_target_name,
+        },
+        'created_target': created_target or (dry_run and preview_target_name is not None),
+        'updates': {
+            'recipe_ingredient_refs': len(ingredient_links),
+            'recipe_garnish_refs': len(garnish_links),
+            'garnish_text_updates': len(garnish_text_matches),
+        },
+        'deleted_source': True,
+    }
+
+    if not dry_run:
+        RecipeIngredient.query.filter_by(ingredient_id=source.id).update({'ingredient_id': target.id})
+        RecipeGarnish.query.filter_by(ingredient_id=source.id).update({'ingredient_id': target.id})
+        for garnish in garnish_text_matches:
+            garnish.garnish_text = target.name
+        db.session.delete(source)
+
+    target_label = target.name if target else preview_target_name
+    summary = f"Merged ingredient {source.name} -> {target_label}"
+    op = _record_operation('ingredient.merge', dry_run=dry_run, details={'summary': summary, **preview})
+    db.session.commit()
+    return jsonify({**preview, 'operation_id': op.id})
+
+
 @app.route('/api/tools')
 @login_required
 def api_tools():
     return jsonify([{'id': t.id, 'name': t.name} for t in Tool.query.order_by(Tool.name).all()])
+
+
+@app.route('/api/admin/tools', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_create_tool():
+    data = request.get_json() or {}
+    name = _normalized_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    existing = Tool.query.filter(db.func.lower(Tool.name) == name.lower()).first()
+    if existing:
+        return jsonify({'error': 'Tool already exists', 'tool': {'id': existing.id, 'name': existing.name}}), 409
+    tool = Tool(name=name)
+    db.session.add(tool)
+    op = _record_operation('tool.create', dry_run=False, details={'tool_name': name, 'summary': f'Created tool {name}'})
+    db.session.commit()
+    return jsonify({'id': tool.id, 'name': tool.name, 'operation_id': op.id}), 201
+
+
+@app.route('/api/admin/tools/<int:tid>', methods=['PUT'])
+@login_required
+@admin_required
+def api_admin_rename_tool(tid):
+    tool = Tool.query.get_or_404(tid)
+    data = request.get_json() or {}
+    dry_run = _extract_dry_run(data)
+    name = _normalized_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    if _normalized_key(name) == _normalized_key(tool.name):
+        preview = {
+            'action': 'tool.rename',
+            'dry_run': dry_run,
+            'current_name': tool.name,
+            'new_name': name,
+            'changed': False,
+            'reason': 'No effective change',
+        }
+        op = _record_operation('tool.rename', dry_run=dry_run, details={'summary': 'No-op tool rename', **preview})
+        db.session.commit()
+        return jsonify({**preview, 'operation_id': op.id})
+
+    conflict = Tool.query.filter(db.func.lower(Tool.name) == name.lower(), Tool.id != tid).first()
+    if conflict:
+        return jsonify({
+            'error': 'Target name already exists as another tool',
+            'conflict': {'id': conflict.id, 'name': conflict.name},
+            'hint': 'Use tool merge endpoint instead',
+        }), 409
+
+    preview = {
+        'action': 'tool.rename',
+        'dry_run': dry_run,
+        'tool_id': tid,
+        'current_name': tool.name,
+        'new_name': name,
+        'changed': True,
+    }
+    if not dry_run:
+        tool.name = name
+    op = _record_operation('tool.rename', dry_run=dry_run, details={'summary': f'Renamed tool {tool.name} -> {name}', **preview})
+    db.session.commit()
+    return jsonify({**preview, 'operation_id': op.id})
+
+
+@app.route('/api/admin/tools/<int:tid>', methods=['DELETE'])
+@login_required
+@admin_required
+def api_admin_delete_tool(tid):
+    tool = Tool.query.get_or_404(tid)
+    dry_run = _parse_bool(request.args.get('dry_run'), default=True)
+    force = _parse_bool(request.args.get('force'), default=False)
+    usage_count = _tool_usage_count(tid)
+    if usage_count > 0 and not force:
+        return jsonify({
+            'error': 'Tool is in use',
+            'usage': {'recipe_tools': usage_count},
+            'hint': 'Use force=true only when intentional, or merge into canonical tool',
+        }), 409
+
+    preview = {
+        'action': 'tool.delete',
+        'dry_run': dry_run,
+        'force': force,
+        'tool': {'id': tool.id, 'name': tool.name},
+        'usage': {'recipe_tools': usage_count},
+        'deleted': usage_count == 0 or force,
+    }
+    if not dry_run and (usage_count == 0 or force):
+        if force:
+            RecipeTool.query.filter_by(tool_id=tid).delete()
+        db.session.delete(tool)
+    op = _record_operation('tool.delete', dry_run=dry_run, details={'summary': f'Delete tool {tool.name}', **preview})
+    db.session.commit()
+    return jsonify({**preview, 'operation_id': op.id})
+
+
+@app.route('/api/admin/tools/merge', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_merge_tools():
+    data = request.get_json() or {}
+    dry_run = _extract_dry_run(data)
+    source_id = data.get('source_id')
+    target_id = data.get('target_id')
+    target_name = _normalized_name(data.get('target_name'))
+
+    try:
+        source_id = int(source_id)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'source_id must be an integer'}), 400
+
+    if target_id is None and not target_name:
+        return jsonify({'error': 'Provide target_id or target_name'}), 400
+
+    source = db.session.get(Tool, source_id)
+    if not source:
+        return jsonify({'error': 'source tool not found'}), 404
+
+    target = None
+    created_target = False
+    preview_target_name = None
+    if target_id is not None:
+        try:
+            target_id = int(target_id)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'target_id must be an integer'}), 400
+        target = db.session.get(Tool, target_id)
+    elif target_name:
+        target = Tool.query.filter(db.func.lower(Tool.name) == target_name.lower()).first()
+        if not target:
+            preview_target_name = target_name
+            if not dry_run:
+                target = Tool(name=target_name)
+                db.session.add(target)
+                db.session.flush()
+                created_target = True
+
+    if not target and not (dry_run and preview_target_name):
+        return jsonify({'error': 'target tool not found'}), 404
+    if target and source.id == target.id:
+        return jsonify({'error': 'source_id and target_id cannot be the same'}), 400
+
+    tool_links = RecipeTool.query.filter_by(tool_id=source.id).all()
+    preview = {
+        'action': 'tool.merge',
+        'dry_run': dry_run,
+        'source': {'id': source.id, 'name': source.name},
+        'target': {
+            'id': target.id if target else None,
+            'name': target.name if target else preview_target_name,
+        },
+        'created_target': created_target or (dry_run and preview_target_name is not None),
+        'updates': {
+            'recipe_tool_refs': len(tool_links),
+        },
+        'deleted_source': True,
+    }
+
+    if not dry_run:
+        RecipeTool.query.filter_by(tool_id=source.id).update({'tool_id': target.id})
+        db.session.delete(source)
+
+    target_label = target.name if target else preview_target_name
+    summary = f"Merged tool {source.name} -> {target_label}"
+    op = _record_operation('tool.merge', dry_run=dry_run, details={'summary': summary, **preview})
+    db.session.commit()
+    return jsonify({**preview, 'operation_id': op.id})
+
+
+@app.route('/api/admin/recipes/bulk-update', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_bulk_update_recipes():
+    data = request.get_json() or {}
+    dry_run = _extract_dry_run(data)
+    filters = data.get('filters') or {}
+    updates = data.get('updates') or {}
+
+    query = Recipe.query
+
+    recipe_ids = filters.get('recipe_ids')
+    if recipe_ids is not None:
+        try:
+            normalized_ids = [int(rid) for rid in recipe_ids]
+        except (TypeError, ValueError):
+            return jsonify({'error': 'filters.recipe_ids must be an integer array'}), 400
+        query = query.filter(Recipe.id.in_(normalized_ids))
+
+    if filters.get('category'):
+        query = query.filter(Recipe.category == str(filters['category']).strip())
+    if 'subtype' in filters:
+        subtype_filter = filters.get('subtype')
+        if subtype_filter is None:
+            query = query.filter(Recipe.subtype.is_(None))
+        else:
+            query = query.filter(Recipe.subtype == str(subtype_filter).strip())
+
+    tag_any = filters.get('tag_any') or []
+    tag_values = [str(t).strip() for t in tag_any if str(t).strip()] if isinstance(tag_any, list) else []
+    if tag_values:
+        query = query.filter(or_(*[Recipe.tags.ilike(f'%"{tag}"%') for tag in tag_values]))
+
+    recipes = query.all()
+    apply_all = _parse_bool(filters.get('apply_all'), default=False)
+    has_effective_filters = any([
+        recipe_ids is not None,
+        bool(filters.get('category')),
+        'subtype' in filters,
+        bool(tag_values),
+    ])
+    if not apply_all and not has_effective_filters:
+        return jsonify({'error': 'Refusing unfiltered bulk update. Set filters.apply_all=true to target all recipes.'}), 400
+
+    if not updates:
+        return jsonify({'error': 'updates object is required'}), 400
+
+    tags_add = parse_tags(updates.get('tags_add', []))
+    tags_remove = parse_tags(updates.get('tags_remove', []))
+    tags_set = updates.get('tags_set')
+
+    category_update = updates.get('category') if 'category' in updates else None
+    subtype_update_marker = 'subtype' in updates
+    subtype_update = updates.get('subtype') if subtype_update_marker else None
+
+    changed_count = 0
+    preview_items = []
+
+    for recipe in recipes:
+        new_category = recipe.category
+        new_subtype = recipe.subtype
+        new_tags = parse_tags(recipe.tags)
+
+        if category_update is not None:
+            new_category = str(category_update).strip() or recipe.category
+        if subtype_update_marker:
+            raw_subtype = subtype_update
+            if raw_subtype is None:
+                new_subtype = None
+            else:
+                new_subtype = str(raw_subtype).strip() or None
+
+        if tags_set is not None:
+            new_tags = parse_tags(tags_set)
+        else:
+            for tag in tags_add:
+                if tag not in new_tags:
+                    new_tags.append(tag)
+            if tags_remove:
+                remove_keys = {t.casefold() for t in tags_remove}
+                new_tags = [t for t in new_tags if t.casefold() not in remove_keys]
+
+        changed = (
+            new_category != recipe.category
+            or new_subtype != recipe.subtype
+            or new_tags != parse_tags(recipe.tags)
+        )
+        if changed:
+            changed_count += 1
+
+        if len(preview_items) < 200:
+            preview_items.append({
+                'recipe_id': recipe.id,
+                'name': recipe.name,
+                'changed': changed,
+                'before': {'category': recipe.category, 'subtype': recipe.subtype, 'tags': parse_tags(recipe.tags)},
+                'after': {'category': new_category, 'subtype': new_subtype, 'tags': new_tags},
+            })
+
+        if not dry_run and changed:
+            recipe.category = new_category
+            recipe.subtype = new_subtype
+            recipe.tags = format_tags(new_tags)
+
+    preview = {
+        'action': 'recipes.bulk_update',
+        'dry_run': dry_run,
+        'matched_recipes': len(recipes),
+        'changed_recipes': changed_count,
+        'filters': filters,
+        'updates': updates,
+        'items_preview': preview_items,
+        'items_preview_truncated': len(recipes) > len(preview_items),
+    }
+    op = _record_operation(
+        'recipes.bulk_update',
+        dry_run=dry_run,
+        details={'summary': f'Bulk recipe update matched={len(recipes)} changed={changed_count}', **preview},
+    )
+    db.session.commit()
+    return jsonify({**preview, 'operation_id': op.id})
+
+
+@app.route('/api/admin/operations', methods=['GET'])
+@login_required
+@admin_required
+def api_admin_operations():
+    try:
+        limit = max(1, min(200, int(request.args.get('limit', 50))))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'limit must be an integer'}), 400
+    rows = OperationLog.query.order_by(OperationLog.id.desc()).limit(limit).all()
+    return jsonify([row.to_dict() for row in rows])
 
 
 # ── API: Image Upload ─────────────────────────────────────────────────────────

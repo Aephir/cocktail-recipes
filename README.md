@@ -165,6 +165,61 @@ Example future import-upsert envelope:
 
 Note: The current app endpoint `POST /api/bulk-import` still accepts a plain JSON array of recipes. The upsert policy envelope is added now to support future importer/dev-tool/MCP implementation.
 
+### Admin Automation Endpoints (MCP-Facing)
+
+The app now exposes admin endpoints for deterministic automation tasks. These are intended for MCP and power-user tooling.
+
+All destructive operations support preview mode with `dry_run=true` (default), and only commit when `dry_run=false`.
+
+- `POST /api/admin/ingredients`
+- `PUT /api/admin/ingredients/:id`
+- `DELETE /api/admin/ingredients/:id?dry_run=true&force=false`
+- `POST /api/admin/ingredients/merge`
+- `POST /api/admin/tools`
+- `PUT /api/admin/tools/:id`
+- `DELETE /api/admin/tools/:id?dry_run=true&force=false`
+- `POST /api/admin/tools/merge`
+- `POST /api/admin/recipes/bulk-update`
+- `GET /api/admin/operations?limit=50`
+
+Merge example (preview):
+
+```bash
+curl -sS -X POST http://your-app/api/admin/ingredients/merge \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"source_id": 12, "target_name": "Cucumber", "dry_run": true}'
+```
+
+Merge example (apply):
+
+```bash
+curl -sS -X POST http://your-app/api/admin/ingredients/merge \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"source_id": 12, "target_name": "Cucumber", "dry_run": false}'
+```
+
+The merge operation rewrites references in `recipe_ingredients` and `recipe_garnishes`, updates matching garnish text, and deletes the merged source item on apply.
+
+### MCP Sync Handoff (Private GitHub Repos)
+
+This repo includes scaffolding for automatic handoff to the MCP repo.
+
+- Contract export script: `scripts/export_mcp_contract.py`
+- Workflow: `.github/workflows/mcp-contract-sync.yml`
+
+Expected behavior:
+
+1. On push to `main`, if API/schema/docs changed, export contract artifacts.
+2. Create/update a branch in MCP repo (`Aephir/cocktail-recipes-mcp`) with those artifacts.
+3. Open/update a PR in MCP repo with summary metadata.
+
+To enable cross-repo sync, configure a repository secret in this repo:
+
+- The workflow uses `github.token` by default.
+- If your runner token cannot write to the MCP repo, update `.github/workflows/mcp-contract-sync.yml` to use a fine-grained PAT or GitHub App token with `contents:write` and `pull_requests:write` for the MCP repo.
+
 ### Bulk Importing Recipes
 
 If you have recipes in messy formats (e.g., copied from websites, PDFs, or handwritten notes), use AI to parse them into JSON, then import via the app.

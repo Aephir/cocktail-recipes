@@ -1,0 +1,191 @@
+{
+  "api_routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/uploads/<path:filename>"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/auth/login"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/auth/logout"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/auth/me"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/recipes"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/recipes/<int:rid>"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/recipes"
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "path": "/api/recipes/<int:rid>"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/bulk-import"
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/recipes/<int:rid>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/fields"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/fields"
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "path": "/api/fields/<int:fid>"
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/fields/<int:fid>"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/ingredients"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/admin/ingredients"
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "path": "/api/admin/ingredients/<int:iid>"
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/admin/ingredients/<int:iid>"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/admin/ingredients/merge"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/tools"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/admin/tools"
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "path": "/api/admin/tools/<int:tid>"
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/admin/tools/<int:tid>"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/admin/tools/merge"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/admin/recipes/bulk-update"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/admin/operations"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/upload"
+    }
+  ],
+  "files": {
+    "README.md": "28d5500553d34c1bc40c9f69671359777e905bfdb910282efaf7cb2729f92e62",
+    "VERSION": "1f2110568627307becae713f8b808f3d9d912d4b2a24ed6a78605f03f7437d3c",
+    "app.py": "240a1f92810f028f48233f68b54b4c535be56891a9848b7e9036623e1d9c68fc"
+  },
+  "generated_at": "2026-07-09T15:39:00.432740+00:00",
+  "mcp_capabilities": {
+    "dry_run_mutations": true,
+    "ingredient_merge": true,
+    "operation_log": true,
+    "recipe_bulk_update": true,
+    "tool_merge": true
+  },
+  "schemas": {
+    "import-upsert.schema.json": "42ecb54150f1b269942d4a329af432b7c5eee8b21f08eddf95d8356eb3c39307",
+    "recipe-api.schema.json": "3f27d947a020e31c21e41fde7cd965868133b079829989476e75196d44cded67"
+  },
+  "source_repo": "Aephir/cocktail-recipes",
+  "version": "0.1.6"
+}

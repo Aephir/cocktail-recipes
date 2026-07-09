@@ -1,0 +1,90 @@
+name: MCP Contract Sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - app.py
+      - schema/**
+      - README.md
+      - VERSION
+      - scripts/export_mcp_contract.py
+  workflow_dispatch:
+
+jobs:
+  sync-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    env:
+      MCP_REPO: Aephir/cocktail-recipes-mcp
+
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Export MCP contract bundle
+        run: python scripts/export_mcp_contract.py
+
+      - name: Validate sync token exists
+        env:
+          GH_TOKEN: ${{ secrets.MCP_SYNC_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "secrets.MCP_SYNC_TOKEN is not available."
+            exit 1
+          fi
+
+      - name: Checkout MCP target repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MCP_REPO }}
+          token: ${{ secrets.MCP_SYNC_TOKEN }}
+          path: target
+
+      - name: Copy generated bundle into MCP repo
+        run: |
+          mkdir -p target/contracts/cocktail-recipes
+          rsync -a --delete generated/mcp-contract/ target/contracts/cocktail-recipes/
+
+      - name: Commit and push sync branch
+        id: push
+        run: |
+          cd target
+          git config user.name "cocktail-sync-bot"
+          git config user.email "cocktail-sync-bot@users.noreply.github.com"
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          branch="sync/api-contract-${GITHUB_SHA::7}"
+          git checkout -b "$branch"
+          git add contracts/cocktail-recipes
+          git commit -m "chore: sync cocktail API contract (${GITHUB_SHA::7})"
+          git push origin "$branch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Create MCP pull request
+        if: steps.push.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.MCP_SYNC_TOKEN }}
+        run: |
+          cd target
+          title="chore: sync cocktail API contract (${GITHUB_SHA::7})"
+          body=$'Automated contract sync from Aephir/cocktail-recipes.\n\nIncludes generated schema bundle and capability manifest for MCP integration.'
+          existing=$(gh pr list --head "${{ steps.push.outputs.branch }}" --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            echo "PR already exists: #$existing"
+            exit 0
+          fi
+          gh pr create --base main --head "${{ steps.push.outputs.branch }}" --title "$title" --body "$body"
