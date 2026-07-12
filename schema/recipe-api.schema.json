@@ -393,32 +393,80 @@
     "IngredientMergeRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source_id"],
       "properties": {
         "source_id": { "type": "integer" },
+        "source_ids": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "minItems": 1
+        },
         "target_id": { "type": "integer" },
         "target_name": { "type": "string" },
         "dry_run": { "type": "boolean", "default": true }
       },
       "anyOf": [
+        { "required": ["source_id"] },
+        { "required": ["source_ids"] },
         { "required": ["target_id"] },
         { "required": ["target_name"] }
+      ],
+      "allOf": [
+        {
+          "anyOf": [
+            { "required": ["source_id"] },
+            { "required": ["source_ids"] }
+          ]
+        },
+        {
+          "anyOf": [
+            { "required": ["target_id"] },
+            { "required": ["target_name"] }
+          ]
+        }
       ]
     },
     "ToolMergeRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source_id"],
       "properties": {
         "source_id": { "type": "integer" },
+        "source_ids": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "minItems": 1
+        },
         "target_id": { "type": "integer" },
         "target_name": { "type": "string" },
         "dry_run": { "type": "boolean", "default": true }
       },
       "anyOf": [
+        { "required": ["source_id"] },
+        { "required": ["source_ids"] },
         { "required": ["target_id"] },
         { "required": ["target_name"] }
+      ],
+      "allOf": [
+        {
+          "anyOf": [
+            { "required": ["source_id"] },
+            { "required": ["source_ids"] }
+          ]
+        },
+        {
+          "anyOf": [
+            { "required": ["target_id"] },
+            { "required": ["target_name"] }
+          ]
+        }
       ]
+    },
+    "IngredientReplaceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dry_run": { "type": "boolean", "default": true },
+        "delete_source": { "type": "boolean", "default": true }
+      }
     },
     "RecipesBulkUpdateRequest": {
       "type": "object",
