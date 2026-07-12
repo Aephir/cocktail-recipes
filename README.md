@@ -27,12 +27,33 @@ A private, web-based cocktail recipe database. Manage your collection of cocktai
 2. In Portainer, create a new stack from Git:
    - Repository URL: `https://github.com/Aephir/cocktail-recipes`
    - Branch: `main`
-3. Set environment variables in Portainer:
-   - `SECRET_KEY`: A random secret key (e.g., `openssl rand -hex 32`)
-   - `ADMIN_PASSWORD`: Password for the admin user
-   - `USER_PASSWORD`: Password for the regular user (optional)
+3. Set environment variables in Portainer using the table below
 4. Deploy the stack
-5. Access at `http://your-portainer-url:port`
+5. Access at `http://your-portainer-url:<APP_PUBLISH_PORT>`
+
+### Portainer Stack Environment Variables
+
+Use these in the Portainer "Environment variables" UI when creating from repository.
+
+| Key | Example value | Required | Notes |
+| --- | --- | --- | --- |
+| `SECRET_KEY` | `openssl rand -hex 32` output | Yes | Flask session signing key. |
+| `ADMIN_PASSWORD` | `change-me` | Yes | Password for admin account. |
+| `USER_PASSWORD` | `guest-readonly` | No | Password for optional read-only account. |
+| `ADMIN_USERNAME` | `admin` | No | Defaults to `admin`. |
+| `USER_USERNAME` | `user` | No | Defaults to `user`. |
+| `APP_PUBLISH_PORT` | `5000` | No | Host port mapped to container port `5000`. |
+| `DATA_HOST_DIR` | `/mnt/storage_1/docker/cocktail_recipes` | Recommended | Host path for persistent DB/uploads. If omitted, compose named volume `cocktail_data` is used. |
+| `DATABASE_URL` | `sqlite:////data/cocktails.db` | No | Override DB connection string. Default uses `/data`. |
+| `UPLOAD_FOLDER` | `/data/uploads` | No | Upload path inside container. Keep under mounted `/data`. |
+| `COOKIE_SECURE` | `true` | No | Set `true` when served over HTTPS. |
+| `COOKIE_SAMESITE` | `Lax` | No | Session cookie SameSite policy. |
+
+### Portainer Notes
+
+1. This compose file reads values directly from stack environment variables and does not require a physical `.env` file.
+2. `cocktail_net` is configured as an external Docker network so this app can communicate with the MCP container by service name.
+3. Ensure `DATA_HOST_DIR` exists and is writable by Docker if you use a host path bind mount.
 
 The app will automatically create the database and seed users on first run.
 
