@@ -439,12 +439,17 @@ def _extract_dry_run(data):
     if isinstance(data, dict):
         if 'dry_run' in data:
             return _parse_bool(data.get('dry_run'), default=True)
+        if 'dryRun' in data:
+            return _parse_bool(data.get('dryRun'), default=True)
         if 'apply' in data:
             return not _parse_bool(data.get('apply'), default=False)
-    if 'dry_run' in request.args:
-        return _parse_bool(request.args.get('dry_run'), default=True)
-    if 'apply' in request.args:
-        return not _parse_bool(request.args.get('apply'), default=False)
+    for source in (request.args, request.form):
+        if 'dry_run' in source:
+            return _parse_bool(source.get('dry_run'), default=True)
+        if 'dryRun' in source:
+            return _parse_bool(source.get('dryRun'), default=True)
+        if 'apply' in source:
+            return not _parse_bool(source.get('apply'), default=False)
     return True
 
 
@@ -1067,9 +1072,9 @@ def api_admin_create_ingredient():
 @admin_required
 def api_admin_rename_ingredient(iid):
     ingredient = Ingredient.query.get_or_404(iid)
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     dry_run = _extract_dry_run(data)
-    name = _normalized_name(data.get('name'))
+    name = _normalized_name(data.get('name')) or _normalized_name(request.values.get('name'))
     if not name:
         return jsonify({'error': 'Name is required'}), 400
     if name == ingredient.name:
@@ -1298,9 +1303,9 @@ def api_admin_create_tool():
 @admin_required
 def api_admin_rename_tool(tid):
     tool = Tool.query.get_or_404(tid)
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     dry_run = _extract_dry_run(data)
-    name = _normalized_name(data.get('name'))
+    name = _normalized_name(data.get('name')) or _normalized_name(request.values.get('name'))
     if not name:
         return jsonify({'error': 'Name is required'}), 400
     if name == tool.name:
