@@ -147,8 +147,14 @@
     <!-- Main -->
     <main id="main">
       <div class="overview-toggle" role="tablist" aria-label="Recipe overview type">
-        <button id="overview-drinks" class="overview-mode-btn active" role="tab" aria-selected="true">Drinks</button>
-        <button id="overview-ingredients" class="overview-mode-btn" role="tab" aria-selected="false">Ingredients</button>
+        <div class="overview-toggle-group">
+          <button id="overview-drinks" class="overview-mode-btn active" role="tab" aria-selected="true">Drinks</button>
+          <button id="overview-ingredients" class="overview-mode-btn" role="tab" aria-selected="false">Ingredients</button>
+        </div>
+        <label class="search-mode-toggle" title="Also search ingredient names inside each recipe">
+          <input id="search-ingredients-toggle" type="checkbox">
+          <span>Search ingredients</span>
+        </label>
       </div>
       <div id="mobile-search-wrap" class="mobile-search-wrap">
         <label class="search-wrap">

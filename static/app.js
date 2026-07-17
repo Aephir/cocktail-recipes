@@ -25,6 +25,7 @@ const S = {
   filterModeSubtypes: 'all',
   filterModeTags: 'all',
   search: '',
+  searchIngredients: false,
   currentId: null,
   editingId: null,
   scale: 1,
@@ -72,6 +73,12 @@ function setSearchValue(nextValue) {
   const mobile = document.getElementById('search-input-mobile');
   if (desktop && desktop.value !== S.search) desktop.value = S.search;
   if (mobile && mobile.value !== S.search) mobile.value = S.search;
+}
+
+function setSearchIngredients(nextValue) {
+  S.searchIngredients = Boolean(nextValue);
+  const checkbox = document.getElementById('search-ingredients-toggle');
+  if (checkbox) checkbox.checked = S.searchIngredients;
 }
 
 function buildTagCatalog(recipes) {
@@ -464,12 +471,14 @@ function applyFilters() {
 
   if (q) {
     list = list.filter(r => {
-      const text = [
-        r.name,
-        r.category,
-        r.subtype,
-        ...(r.tags || []),
-      ].filter(Boolean).join(' ').toLowerCase();
+      const textParts = [r.name];
+      if (S.searchIngredients) {
+        textParts.push(
+          ...(r.ingredients || []).map(ingredientDisplayName),
+          ...(r.garnishes || []).map(g => String(g?.ingredient_name || g?.garnish_text || '').trim()),
+        );
+      }
+      const text = textParts.filter(Boolean).join(' ').toLowerCase();
       return text.includes(q);
     });
   }
@@ -2079,6 +2088,15 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   bindSearchInput(document.getElementById('search-input'));
   bindSearchInput(document.getElementById('search-input-mobile'));
+
+  const searchIngredientsToggle = document.getElementById('search-ingredients-toggle');
+  if (searchIngredientsToggle) {
+    searchIngredientsToggle.addEventListener('change', e => {
+      setSearchIngredients(e.target.checked);
+      applyFilters();
+    });
+  }
+  setSearchIngredients(S.searchIngredients);
 
   document.getElementById('sort-by').addEventListener('change', () => applyFilters());
 
