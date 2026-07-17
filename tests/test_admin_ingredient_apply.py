@@ -142,6 +142,28 @@ class AdminIngredientApplyRegressionTest(unittest.TestCase):
         names_after_apply = {item['name'] for item in list_after_apply.get_json()}
         self.assertNotIn(ingredient_name, names_after_apply)
 
+    def test_admin_ingredient_delete_apply_works_without_json_content_type(self):
+        unique = uuid4().hex[:10]
+        ingredient_name = f'Delete Ingredient Raw Body {unique}'
+
+        create_resp = self.client.post('/api/admin/ingredients', json={'name': ingredient_name})
+        self.assertEqual(create_resp.status_code, 201, create_resp.get_data(as_text=True))
+        ingredient_id = create_resp.get_json()['id']
+
+        apply_resp = self.client.delete(
+            f'/api/admin/ingredients/{ingredient_id}',
+            data='{"dry_run": false}',
+        )
+        self.assertEqual(apply_resp.status_code, 200, apply_resp.get_data(as_text=True))
+        apply_payload = apply_resp.get_json()
+        self.assertFalse(apply_payload['dry_run'])
+        self.assertTrue(apply_payload['deleted'])
+
+        list_after_apply = self.client.get('/api/ingredients')
+        self.assertEqual(list_after_apply.status_code, 200)
+        names_after_apply = {item['name'] for item in list_after_apply.get_json()}
+        self.assertNotIn(ingredient_name, names_after_apply)
+
     def test_admin_tool_rename_honors_dry_run_and_apply(self):
         unique = uuid4().hex[:10]
         initial_name = f'Dry Run Tool {unique}'

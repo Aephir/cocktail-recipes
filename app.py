@@ -453,6 +453,20 @@ def _extract_dry_run(data):
     return True
 
 
+def _extract_request_data():
+    data = request.get_json(silent=True)
+    if isinstance(data, dict):
+        return data
+
+    # Some clients send JSON bodies on DELETE without Content-Type.
+    # Force-parse as a compatibility fallback so apply/dry_run flags are honored.
+    forced = request.get_json(silent=True, force=True)
+    if isinstance(forced, dict):
+        return forced
+
+    return {}
+
+
 def _normalized_name(value):
     return str(value or '').strip()
 
@@ -1118,7 +1132,7 @@ def api_admin_rename_ingredient(iid):
 @admin_required
 def api_admin_delete_ingredient(iid):
     ingredient = Ingredient.query.get_or_404(iid)
-    data = request.get_json(silent=True) or {}
+    data = _extract_request_data()
     dry_run = _extract_dry_run(data)
     if isinstance(data, dict) and 'force' in data:
         force = _parse_bool(data.get('force'), default=False)
@@ -1349,7 +1363,7 @@ def api_admin_rename_tool(tid):
 @admin_required
 def api_admin_delete_tool(tid):
     tool = Tool.query.get_or_404(tid)
-    data = request.get_json(silent=True) or {}
+    data = _extract_request_data()
     dry_run = _extract_dry_run(data)
     if isinstance(data, dict) and 'force' in data:
         force = _parse_bool(data.get('force'), default=False)
