@@ -845,9 +845,23 @@ function renderDetail(recipe) {
     </tr>`;
   }).join('');
 
-  const toolsHtml = recipe.tools.length
-    ? recipe.tools.map(t => `<span class="tool-chip">${esc(displayLabel(t.tool_name))}</span>`).join('')
+  const normalizedGlassware = (recipe.glassware || '').trim().toLowerCase();
+  const visibleTools = (recipe.tools || []).filter(t => {
+    const toolName = String(t.tool_name || '').trim();
+    if (!toolName) return false;
+    return !normalizedGlassware || toolName.toLowerCase() !== normalizedGlassware;
+  });
+
+  const toolsHtml = visibleTools.length
+    ? visibleTools.map(t => `<span class="tool-chip">${esc(displayLabel(t.tool_name))}</span>`).join('')
     : '<span style="color:var(--text-muted)">—</span>';
+
+  const glasswareHtml = recipe.glassware
+    ? `<div class="dsec">
+        <div class="dsec-title">Glassware</div>
+        <div class="detail-tools"><span class="tool-chip">${esc(displayLabel(recipe.glassware))}</span></div>
+      </div>`
+    : '';
 
   const garnishHtml = recipe.garnishes?.length
     ? `<div class="dsec">
@@ -895,6 +909,8 @@ function renderDetail(recipe) {
       </div>` : ''}
 
       ${garnishHtml}
+
+      ${glasswareHtml}
 
       ${recipe.notes ? `
       <div class="dsec">
@@ -1296,6 +1312,7 @@ async function openEditForm() {
   document.getElementById('f-proc').value = recipe.procedure || '';
   document.getElementById('f-notes').value = recipe.notes || '';
   document.getElementById('f-category').value = recipe.category || 'Other';
+  document.getElementById('f-glassware').value = recipe.glassware || '';
   S.formTags = (recipe.tags || []).map(normalizeTag).filter(Boolean);
   renderFormTags();
   updateSubtypeState();
@@ -1355,6 +1372,7 @@ function resetForm() {
   document.getElementById('f-name').value = '';
   document.getElementById('f-score').value = '';
   document.getElementById('f-category').value = 'Other';
+  document.getElementById('f-glassware').value = '';
   document.getElementById('f-subtype').value = '';
   S.formTags = [];
   renderFormTags();
@@ -1730,6 +1748,7 @@ async function saveRecipe() {
     score: parseInt(document.getElementById('f-score').value, 10) || null,
     category,
     subtype,
+    glassware: document.getElementById('f-glassware').value.trim() || null,
     tags: S.formTags,
     procedure: document.getElementById('f-proc').value.trim(),
     notes: document.getElementById('f-notes').value.trim(),

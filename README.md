@@ -174,6 +174,7 @@ Example future import-upsert envelope:
         { "amount": 1, "unit": "oz", "ingredient_name": "lime juice" },
         { "amount": 0.75, "unit": "oz", "ingredient_name": "simple syrup" }
       ],
+      "glassware": "coupe",
       "tools": ["shaker"],
       "garnishes": [],
       "procedure": "Shake with ice and fine strain.",
@@ -265,6 +266,7 @@ Parse the following cocktail recipe text into a JSON array of recipes. Each reci
       "subrecipe_id": "number or null (optional)"
     }
   ],
+  "glassware": "string or null",
   "garnishes": [
     {
       "garnish_text": "string",
@@ -283,6 +285,7 @@ Handle variations like:
 - Units: "ml", "cl", "dash", etc. (standardize to common units)
 - Ingredients: Extract names, ignore brands unless specified
 - Tools: e.g., "shaker", "strainer"
+- Glassware: move serving vessel terms (e.g., "Nick & Nora glass", "Whisky tumbler") to `glassware`
 - Procedure: Convert to numbered steps if not already
 - Multiple recipes: Separate into array elements
 - Ignore irrelevant text (e.g., ads, images)

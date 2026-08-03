@@ -126,6 +126,7 @@
         "category": { "$ref": "#/$defs/Category" },
         "subtype": { "type": ["string", "null"] },
         "score": { "type": ["integer", "null"], "minimum": 1, "maximum": 10 },
+        "glassware": { "type": ["string", "null"] },
         "tags": { "$ref": "#/$defs/TagsInput" },
         "procedure": { "type": "string" },
         "notes": { "type": "string" },
@@ -239,6 +240,7 @@
         "category": { "$ref": "#/$defs/Category" },
         "subtype": { "type": ["string", "null"] },
         "score": { "type": ["integer", "null"], "minimum": 1, "maximum": 10 },
+        "glassware": { "type": ["string", "null"] },
         "tags": { "$ref": "#/$defs/TagsInput" },
         "procedure": { "type": "string" },
         "notes": { "type": "string" },
@@ -304,6 +306,7 @@
         "image_url",
         "image_thumb_url",
         "score",
+        "glassware",
         "ingredients",
         "category",
         "subtype",
@@ -322,6 +325,7 @@
         "image_url": { "type": ["string", "null"] },
         "image_thumb_url": { "type": ["string", "null"] },
         "score": { "type": ["integer", "null"] },
+        "glassware": { "type": ["string", "null"] },
         "ingredients": {
           "type": "array",
           "items": { "$ref": "#/$defs/RecipeIngredientOutput" }

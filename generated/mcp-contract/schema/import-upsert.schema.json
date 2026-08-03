@@ -69,6 +69,7 @@
           "additionalProperties": false,
           "required": [
             "scalar_fields",
+            "glassware",
             "tags",
             "ingredients",
             "tools",
@@ -78,6 +79,10 @@
           ],
           "properties": {
             "scalar_fields": {
+              "type": "string",
+              "enum": ["replace", "fill_missing", "keep_existing"]
+            },
+            "glassware": {
               "type": "string",
               "enum": ["replace", "fill_missing", "keep_existing"]
             },

@@ -61,14 +61,36 @@ def normalize_tool_name(value):
     return text.strip()
 
 
-def choose_glass_icon(tools):
-    tool_names = [normalize_tool_name(tool.tool.name) for tool in tools]
+def _glass_icon_for_name(name):
+    normalized_name = normalize_tool_name(name)
+    if not normalized_name:
+        return None
     for aliases, filename in GLASS_ICON_LOOKUP:
         for alias in aliases:
             normalized_alias = normalize_tool_name(alias)
-            for tool_name in tool_names:
-                if normalized_alias and normalized_alias in tool_name:
-                    return filename
+            if normalized_alias and normalized_alias in normalized_name:
+                return filename
+    return None
+
+
+def infer_glassware_name_from_tools(tools):
+    for tool in tools:
+        tool_name = tool.tool.name if tool and tool.tool else None
+        if _glass_icon_for_name(tool_name):
+            return tool_name
+    return None
+
+
+def choose_glass_icon(glassware, tools):
+    icon_from_glassware = _glass_icon_for_name(glassware)
+    if icon_from_glassware:
+        return icon_from_glassware
+
+    for tool in tools:
+        tool_name = tool.tool.name if tool and tool.tool else None
+        icon_from_tool = _glass_icon_for_name(tool_name)
+        if icon_from_tool:
+            return icon_from_tool
     return None
 
 
@@ -331,6 +353,7 @@ class Recipe(db.Model):
     subtype = db.Column(db.String(100), nullable=True)
     tags = db.Column(db.Text, default='[]')
     score = db.Column(db.Integer, default=0, nullable=False)
+    glassware = db.Column(db.String(200), nullable=True)
     procedure = db.Column(db.Text, default='')
     notes = db.Column(db.Text, default='')
     image_filename = db.Column(db.String(256))
@@ -358,13 +381,14 @@ class Recipe(db.Model):
                 thumb_path = os.path.join(app.config['UPLOAD_FOLDER'], thumb_name)
                 image_thumb_url = f'/uploads/{thumb_name}' if os.path.exists(thumb_path) else image_url
         if not image_url:
-            icon_file = 'bottle.svg' if self.category == 'Ingredient' else choose_glass_icon(self.recipe_tools)
+            icon_file = 'bottle.svg' if self.category == 'Ingredient' else choose_glass_icon(self.glassware, self.recipe_tools)
             image_url = f'/static/glass-icons/{icon_file}' if icon_file else None
             image_thumb_url = image_url
 
         return {
             'id': self.id,
             'name': self.name,
+            'glassware': self.glassware,
             'procedure': self.procedure or '',
             'notes': self.notes or '',
             'image_filename': self.image_filename,
@@ -583,6 +607,11 @@ def _tool_usage_count(tool_id):
     return RecipeTool.query.filter_by(tool_id=tool_id).count()
 
 
+def _normalized_optional_text(value):
+    normalized = _normalized_name(value)
+    return normalized or None
+
+
 # ── Frontend ─────────────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -673,6 +702,7 @@ def api_create_recipe():
         subtype=subtype,
         tags=format_tags(tags),
         score=normalize_score(data['score']) if 'score' in data else 0,
+        glassware=_normalized_optional_text(data.get('glassware')),
         procedure=data.get('procedure', '').strip(),
         notes=data.get('notes', '').strip(),
         image_filename=data.get('image_filename'),
@@ -720,6 +750,8 @@ def api_update_recipe(rid):
         recipe.tags = format_tags(parse_tags(data.get('tags', [])))
     if 'score' in data:
         recipe.score = normalize_score(data['score'], missing_default=recipe.score if recipe.score is not None else 0)
+    if 'glassware' in data:
+        recipe.glassware = _normalized_optional_text(data.get('glassware'))
     recipe.procedure = data.get('procedure', recipe.procedure or '').strip()
     recipe.notes = data.get('notes', recipe.notes or '').strip()
     if 'image_filename' in data:
@@ -808,6 +840,7 @@ def api_bulk_import():
                 subtype=subtype,
                 tags=format_tags(tags),
                 score=score,
+                glassware=_normalized_optional_text(recipe_data.get('glassware')),
                 procedure=recipe_data.get('procedure', '').strip(),
                 notes=recipe_data.get('notes', '').strip() if recipe_data.get('notes') else '',
                 image_filename=recipe_data.get('image_filename'),
@@ -1679,6 +1712,9 @@ with app.app_context():
     if 'tags' not in recipe_columns:
         db.session.execute(text("ALTER TABLE recipes ADD COLUMN tags TEXT DEFAULT '[]'"))
         db.session.commit()
+    if 'glassware' not in recipe_columns:
+        db.session.execute(text('ALTER TABLE recipes ADD COLUMN glassware VARCHAR(200)'))
+        db.session.commit()
     ri_columns = db.inspect(db.engine).get_columns('recipe_ingredients')
     columns = [c['name'] for c in ri_columns]
     if 'subrecipe_id' not in columns:
@@ -1742,6 +1778,20 @@ with app.app_context():
         """
     ))
     db.session.commit()
+
+    backfilled_glassware = 0
+    recipes_missing_glassware = Recipe.query.filter(
+        or_(Recipe.glassware.is_(None), db.func.trim(Recipe.glassware) == '')
+    ).all()
+    for recipe in recipes_missing_glassware:
+        inferred_glassware = infer_glassware_name_from_tools(recipe.recipe_tools)
+        if not inferred_glassware:
+            continue
+        recipe.glassware = inferred_glassware
+        backfilled_glassware += 1
+    if backfilled_glassware:
+        logger.info('Backfilled glassware on %s recipes from legacy tools data', backfilled_glassware)
+        db.session.commit()
 
     def _seed(username_env, password_env, default_u, default_p, role):
         uname = os.environ.get(username_env, default_u)
