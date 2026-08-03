@@ -58,7 +58,7 @@ Use these in the Portainer "Environment variables" UI when creating from reposit
 The app will automatically create the database and seed users on first run.
 
 ### Version
-Current release: `v0.1.6`
+Current release: `v0.1.9`
 
 We use releases with standard versioning (vX.Y.Z). There will also be a tag=stable.
 
@@ -154,6 +154,7 @@ Example future import-upsert envelope:
     "on_missing": "create",
     "field_merge": {
       "scalar_fields": "replace",
+      "glassware": "replace",
       "tags": "union",
       "ingredients": "replace",
       "tools": "replace",

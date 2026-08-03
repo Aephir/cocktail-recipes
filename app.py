@@ -1,14 +1,17 @@
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text, or_
+import logging
 import json
 import hashlib
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.exceptions import HTTPException, BadRequest
+from werkzeug.exceptions import HTTPException, BadRequest, NotFound
 import re
 from werkzeug.utils import secure_filename
 import os
+from datetime import datetime, timedelta, timezone
+from functools import wraps
 from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -139,9 +142,11 @@ def map_legacy_classification(value):
         if category.lower() == key:
             return category, None
     return raw, None
-import logging
-from datetime import datetime, timedelta
-from functools import wraps
+
+
+def utcnow_naive():
+    """Return a UTC timestamp as naive datetime for existing DB schema compatibility."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -181,6 +186,13 @@ app.config.update(
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+
+def _session_get_or_404(model, obj_id):
+    obj = db.session.get(model, obj_id)
+    if obj is None:
+        raise NotFound()
+    return obj
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 MAX_UPLOAD_IMAGE_DIM = 1600
@@ -268,7 +280,7 @@ class OperationLog(db.Model):
     summary = db.Column(db.Text, default='')
     params_json = db.Column(db.Text, default='{}')
     params_hash = db.Column(db.String(64), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utcnow_naive, nullable=False)
 
     def to_dict(self):
         payload = {}
@@ -357,8 +369,8 @@ class Recipe(db.Model):
     procedure = db.Column(db.Text, default='')
     notes = db.Column(db.Text, default='')
     image_filename = db.Column(db.String(256))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow_naive)
+    updated_at = db.Column(db.DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
     recipe_ingredients = db.relationship(
         'RecipeIngredient', back_populates='recipe',
@@ -664,7 +676,7 @@ def api_recipes():
 @app.route('/api/recipes/<int:rid>', methods=['GET'])
 @login_required
 def api_recipe(rid):
-    return jsonify(Recipe.query.get_or_404(rid).to_dict())
+    return jsonify(_session_get_or_404(Recipe, rid).to_dict())
 
 
 @app.route('/api/recipes', methods=['POST'])
@@ -721,7 +733,7 @@ def api_create_recipe():
 @login_required
 @admin_required
 def api_update_recipe(rid):
-    recipe = Recipe.query.get_or_404(rid)
+    recipe = _session_get_or_404(Recipe, rid)
     try:
         data = request.get_json()
     except BadRequest as exc:
@@ -758,7 +770,7 @@ def api_update_recipe(rid):
         if recipe.image_filename and recipe.image_filename != data['image_filename']:
             _delete_upload_artifacts(recipe.image_filename)
         recipe.image_filename = data['image_filename']
-    recipe.updated_at = datetime.utcnow()
+    recipe.updated_at = utcnow_naive()
 
     RecipeIngredient.query.filter_by(recipe_id=rid).delete()
     RecipeTool.query.filter_by(recipe_id=rid).delete()
@@ -865,7 +877,7 @@ def api_bulk_import():
 @login_required
 @admin_required
 def api_delete_recipe(rid):
-    recipe = Recipe.query.get_or_404(rid)
+    recipe = _session_get_or_404(Recipe, rid)
     if recipe.image_filename:
         _delete_upload_artifacts(recipe.image_filename)
     db.session.delete(recipe)
@@ -1057,7 +1069,7 @@ def api_create_field():
 @login_required
 @admin_required
 def api_update_field(fid):
-    f = CustomFieldDef.query.get_or_404(fid)
+    f = _session_get_or_404(CustomFieldDef, fid)
     data = request.get_json() or {}
     if 'name' in data:
         name = (data.get('name') or '').strip()
@@ -1082,7 +1094,7 @@ def api_update_field(fid):
 @login_required
 @admin_required
 def api_delete_field(fid):
-    f = CustomFieldDef.query.get_or_404(fid)
+    f = _session_get_or_404(CustomFieldDef, fid)
     db.session.delete(f)
     db.session.commit()
     return jsonify({'ok': True})
@@ -1118,7 +1130,7 @@ def api_admin_create_ingredient():
 @login_required
 @admin_required
 def api_admin_rename_ingredient(iid):
-    ingredient = Ingredient.query.get_or_404(iid)
+    ingredient = _session_get_or_404(Ingredient, iid)
     data = request.get_json(silent=True) or {}
     dry_run = _extract_dry_run(data)
     name = _normalized_name(data.get('name')) or _normalized_name(request.values.get('name'))
@@ -1164,7 +1176,7 @@ def api_admin_rename_ingredient(iid):
 @login_required
 @admin_required
 def api_admin_delete_ingredient(iid):
-    ingredient = Ingredient.query.get_or_404(iid)
+    ingredient = _session_get_or_404(Ingredient, iid)
     data = _extract_request_data()
     dry_run = _extract_dry_run(data)
     if isinstance(data, dict) and 'force' in data:
@@ -1349,7 +1361,7 @@ def api_admin_create_tool():
 @login_required
 @admin_required
 def api_admin_rename_tool(tid):
-    tool = Tool.query.get_or_404(tid)
+    tool = _session_get_or_404(Tool, tid)
     data = request.get_json(silent=True) or {}
     dry_run = _extract_dry_run(data)
     name = _normalized_name(data.get('name')) or _normalized_name(request.values.get('name'))
@@ -1395,7 +1407,7 @@ def api_admin_rename_tool(tid):
 @login_required
 @admin_required
 def api_admin_delete_tool(tid):
-    tool = Tool.query.get_or_404(tid)
+    tool = _session_get_or_404(Tool, tid)
     data = _extract_request_data()
     dry_run = _extract_dry_run(data)
     if isinstance(data, dict) and 'force' in data:
@@ -1655,7 +1667,7 @@ def api_upload():
     ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
     if ext not in ALLOWED_EXTENSIONS:
         return jsonify({'error': f'File type .{ext} not allowed'}), 400
-    ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+    ts = utcnow_naive().strftime('%Y%m%d_%H%M%S_%f')
     base_name = secure_filename(os.path.splitext(f.filename)[0]) or 'upload'
 
     # Keep GIF uploads as-is to preserve animation.

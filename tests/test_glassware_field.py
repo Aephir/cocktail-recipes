@@ -10,7 +10,7 @@ os.environ['DATABASE_URL'] = f'sqlite:///{_db_path}'
 os.environ['UPLOAD_FOLDER'] = _upload_dir
 os.environ.setdefault('SECRET_KEY', 'test-secret')
 
-from app import app  # noqa: E402
+from app import app, db  # noqa: E402
 
 
 class GlasswareFieldTest(unittest.TestCase):
@@ -24,6 +24,12 @@ class GlasswareFieldTest(unittest.TestCase):
         )
         if resp.status_code != 200:
             raise RuntimeError(f'Failed to log in as admin for tests: {resp.status_code} {resp.get_data(as_text=True)}')
+
+    @classmethod
+    def tearDownClass(cls):
+        with app.app_context():
+            db.session.remove()
+            db.engine.dispose()
 
     def test_recipe_create_persists_glassware_and_uses_icon(self):
         unique = uuid4().hex[:10]
